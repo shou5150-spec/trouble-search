@@ -612,4 +612,210 @@ async function handleSearch(){
   }
 
   const apiKey=getApiKey();
-  
+   if(!apiKey){
+    indicator.innerHTML='';
+    content.innerHTML='<div class="error-card">APIキーが設定されていません。⚙️設定から登録してください。</div>';
+    return;
+  }
+
+  // ── Stage1インジケーター表示 ───────────────────
+  indicator.innerHTML=`
+    <div class="stage-indicator">
+      <div class="stage-dot active" id="dot1"></div>
+      <div class="stage-label active" id="lbl1">① キーワード絞り込み</div>
+      <div class="stage-line"></div>
+      <div class="stage-dot" id="dot2"></div>
+      <div class="stage-label" id="lbl2">② AI類似検索</div>
+    </div>`;
+
+  content.innerHTML='<div class="loading-wrap"><div class="spinner"></div><div>キーワードで絞り込み中...</div></div>';
+
+  // ── Stage1: キーワード絞り込み ─────────────────
+  await new Promise(r=>setTimeout(r,300)); // UI更新のため少し待つ
+  const filtered = keywordFilter(records, query, 60);
+  const totalCount = records.length;
+  const filteredCount = filtered.length;
+
+  // Stage1完了 → Stage2へ
+  document.getElementById('dot1').className='stage-dot done';
+  document.getElementById('lbl1').className='stage-label done';
+  document.getElementById('dot2').className='stage-dot active';
+  document.getElementById('lbl2').className='stage-label active';
+
+  content.innerHTML=`
+    <div class="filter-result-badge">
+      ✅ ${totalCount}件 → <strong style="color:#22d3ee;margin:0 4px">${filteredCount}件</strong>に絞り込み
+    </div>
+    <div class="loading-wrap"><div class="spinner"></div><div>AIが類似事例を分析中...</div><div class="loading-step">しばらくお待ちください</div></div>`;
+
+  // データが0件の場合
+  if(filteredCount===0){
+    document.getElementById('dot2').className='stage-dot done';
+    document.getElementById('lbl2').className='stage-label done';
+    content.innerHTML=`
+      <div class="filter-result-badge">検索結果：0件</div>
+      <div class="error-card">キーワードに一致する事例が見つかりませんでした。<br>別のキーワードで試してください。</div>`;
+    return;
+  }
+
+  // ── Stage2: AI検索 ────────────────────────────
+  const recordsText=filtered.map((r,i)=>
+    `【事例${i+1}】日時:${r.date||'不明'} / 施設:${r.facility||''} / 管轄:${r.jurisdiction||'不明'} / 機器:${r.equipment||''} / 症状:${r.symptom||''} / 状況:${r.situation||''} / 原因:${r.cause||''} / 対処:${r.action||''}`
+  ).join('\n');
+
+  const prompt=`あなたは浄化センターのトラブル対応支援AIです。
+以下は「${query}」に関連する過去のトラブル事例（キーワード絞り込み済み${filteredCount}件）です：
+${recordsText}
+---
+現在発生しているトラブル：「${query}」
+
+上記から最も類似する事例を最大3件抽出してください。
+以下のJSON形式のみで返してください（前置き・説明文・マークダウン記号は不要）：
+{"similar":[{"rank":1,"match":"類似理由20字以内","date":"日時","facility":"施設名","jurisdiction":"管轄","equipment":"機器名","symptom":"症状","cause":"原因","action":"対処法","note":"所見"}],"advice":"現在のトラブルへの対応アドバイスを120字程度で"}`;
+
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key':apiKey,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})
+    });
+    const data=await res.json();
+    if(data.error)throw new Error(data.error.message);
+    const text=(data.content||[]).map(c=>c.text||'').join('');
+    const parsed=JSON.parse(text.replace(/```json|```/g,'').trim());
+
+    // Stage2完了
+    document.getElementById('dot2').className='stage-dot done';
+    document.getElementById('lbl2').className='stage-label done';
+
+    renderResult(parsed, totalCount, filteredCount);
+  }catch(e){
+    content.innerHTML=`<div class="error-card">エラーが発生しました。<br><small>${e.message}</small></div>`;
+  }
+}
+
+function renderResult(data, totalCount, filteredCount){
+  const content=document.getElementById('result-content');
+  let html=`<div class="filter-result-badge">✅ ${totalCount}件 → <strong style="color:#22d3ee;margin:0 4px">${filteredCount}件</strong>に絞り込んでAI分析</div>`;
+  html+=`<div class="advice-card"><div class="advice-label">💡 AI アドバイス</div><div class="advice-text">${data.advice||''}</div></div>`;
+  html+=`<div class="section-label">類似事例</div>`;
+  (data.similar||[]).forEach(item=>{
+    const j=item.jurisdiction||'不明';
+    html+=`<div class="result-card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span class="rank-badge">#${item.rank}</span>
+        <span class="match-text">${item.match||''}</span>
+        <span class="jurisdiction-badge j-${j}">${j}</span>
+        <span class="date-text">${item.date||''}</span>
+      </div>
+      <div style="font-size:12px;color:#64748b;margin-bottom:8px">${item.facility||''} ${item.equipment?'／ 🔧 '+item.equipment:''}</div>
+      <div class="field"><div class="field-label">症状</div><div class="symptom-text">${item.symptom||'-'}</div></div>
+      <div class="field"><div class="field-label">原因</div><div class="cause-text">${item.cause||'-'}</div></div>
+      <div class="field"><div class="field-label">対処法</div><div class="action-text">${item.action||'-'}</div></div>
+      ${item.note?`<div class="field"><div class="field-label">所見</div><div class="note-text">${item.note}</div></div>`:''}
+    </div>`;
+  });
+  content.innerHTML=html;
+}
+
+// ── History ────────────────────────────────────────
+function renderHistory(){
+  let records=getRecords();
+  if(activeHistoryFilter!=='全て') records=records.filter(r=>(r.jurisdiction||'不明')===activeHistoryFilter);
+  document.getElementById('history-count').textContent=records.length+'件';
+  const list=document.getElementById('history-list');
+  if(records.length===0){
+    list.innerHTML=`<div class="empty-wrap"><div class="empty-icon">📭</div><div>データがありません</div><button class="import-link" onclick="showScreen('import')">PDFを取り込む</button></div>`;
+    return;
+  }
+  list.innerHTML=records.map((r,i)=>{
+    const j=r.jurisdiction||'不明';
+    return `<div class="history-item">
+      <div class="history-date"><span>${r.date||'日時不明'}</span><span class="jurisdiction-badge j-${j}">${j}</span><span style="color:#475569">#${i+1}</span></div>
+      <div class="history-symptom">${r.facility||''} ${r.equipment?'／ '+r.equipment:''}</div>
+      <div class="history-cause">${r.symptom||''}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── バックアップ・復元 ─────────────────────────────
+function backupData(){
+  const records=getRecords();
+  if(records.length===0){
+    document.getElementById('backup-msg').innerHTML='<div class="msg msg-error">❌ データがありません</div>';
+    setTimeout(()=>document.getElementById('backup-msg').innerHTML='',2000);
+    return;
+  }
+  const backup={
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    count: records.length,
+    records: records
+  };
+  const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const now=new Date();
+  const dateStr=`${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+  a.href=url;
+  a.download=`トラブル事例バックアップ_${dateStr}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  document.getElementById('backup-msg').innerHTML=`<div class="msg">✅ ${records.length}件をバックアップしました</div>`;
+  setTimeout(()=>document.getElementById('backup-msg').innerHTML='',2500);
+}
+
+function restoreData(e){
+  const file=e.target.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const backup=JSON.parse(ev.target.result);
+      // バージョンチェック
+      if(!backup.records||!Array.isArray(backup.records)){
+        throw new Error('無効なバックアップファイルです');
+      }
+      const existing=getRecords();
+      if(existing.length>0){
+        const ans=confirm(`現在${existing.length}件のデータがあります。\n\nバックアップ（${backup.records.length}件）を追加しますか？\n\n「OK」→追加　「キャンセル」→上書き`);
+        if(ans){
+          // 追加
+          const merged=[...existing,...backup.records.map((r,i)=>({...r,id:existing.length+i+1}))];
+          saveRecords(merged);
+          document.getElementById('backup-msg').innerHTML=`<div class="msg">✅ ${backup.records.length}件を追加しました（合計${merged.length}件）</div>`;
+        }else{
+          // 上書き
+          saveRecords(backup.records);
+          document.getElementById('backup-msg').innerHTML=`<div class="msg">✅ ${backup.records.length}件を復元しました</div>`;
+        }
+      }else{
+        saveRecords(backup.records);
+        document.getElementById('backup-msg').innerHTML=`<div class="msg">✅ ${backup.records.length}件を復元しました</div>`;
+      }
+      setTimeout(()=>{document.getElementById('backup-msg').innerHTML='';showScreen('home')},2000);
+    }catch(err){
+      document.getElementById('backup-msg').innerHTML=`<div class="msg msg-error">❌ 読み込み失敗：${err.message}</div>`;
+    }
+  };
+  reader.readAsText(file,'UTF-8');
+  e.target.value='';
+}
+function clearAllData(){
+  if(!confirm('本当にすべてのデータを削除しますか？'))return;
+  localStorage.removeItem(STORAGE_KEY);
+  updateCount();
+  alert('削除しました。');
+  showScreen('home');
+}
+
+updateCount();
+</script>
+</body>
+</html>
+ 
