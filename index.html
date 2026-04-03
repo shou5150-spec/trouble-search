@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="トラブル検索">
+<meta name="theme-color" content="#0f172a">
+<title>トラブル類似事例検索</title>
+<link rel="manifest" id="manifest-link">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:#0f172a;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Noto Sans JP',sans-serif;min-height:100vh;max-width:480px;margin:0 auto}
+.screen{display:none;flex-direction:column;min-height:100vh;padding:env(safe-area-inset-top,24px) 20px env(safe-area-inset-bottom,24px)}
+.screen.active{display:flex}
+.back-btn{color:#22d3ee;font-size:14px;background:none;border:none;padding:8px 0 16px;cursor:pointer}
+.badge{font-size:10px;color:#22d3ee;font-weight:800;letter-spacing:3px;margin-bottom:4px}
+h1{font-size:26px;font-weight:900;line-height:1.2;margin-bottom:8px}
+h2{font-size:20px;font-weight:900;margin-bottom:4px}
+.sub{color:#94a3b8;font-size:12px;margin-bottom:20px}
+.stat-card{background:#1e293b;border:1px solid rgba(34,211,238,0.3);border-radius:16px;padding:16px;margin-bottom:12px}
+.stat-label{font-size:11px;color:#94a3b8;margin-bottom:4px}
+.stat-num{font-size:36px;font-weight:900;color:#22d3ee}
+.stat-unit{font-size:16px;color:#cbd5e1;margin-left:4px}
+.btn{width:100%;padding:14px;border-radius:14px;font-weight:700;font-size:14px;border:none;cursor:pointer;transition:all 0.15s;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:8px;font-family:inherit}
+.btn:active{transform:scale(0.97)}
+.btn-primary{background:#22d3ee;color:#0f172a;font-size:16px}
+.btn-secondary{background:#1e293b;color:#fff}
+.btn-danger{background:rgba(239,68,68,0.2);color:#fca5a5}
+.btn:disabled{opacity:0.4}
+.card{background:#1e293b;border-radius:16px;padding:16px;margin-bottom:12px;border:1px solid #334155}
+textarea{width:100%;background:#1e293b;border-radius:16px;padding:14px;color:#fff;font-size:16px;border:1px solid #334155;resize:none;outline:none;margin-bottom:8px;font-family:inherit}
+textarea:focus{border-color:#22d3ee}
+textarea::placeholder{color:#475569}
+input.edit-input{width:100%;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:8px 10px;color:#fff;font-size:13px;outline:none;font-family:inherit;margin-bottom:2px}
+input.edit-input:focus{border-color:#22d3ee}
+.tag{background:#1e293b;color:#94a3b8;font-size:12px;padding:6px 12px;border-radius:20px;border:none;cursor:pointer;font-family:inherit}
+.tags{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.spinner{width:40px;height:40px;border:4px solid #22d3ee;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-wrap{display:flex;flex-direction:column;align-items:center;padding:60px 0;color:#94a3b8;font-size:14px;text-align:center;gap:4px}
+.loading-step{font-size:12px;color:#64748b;margin-top:4px}
+.advice-card{background:rgba(34,211,238,0.1);border:1px solid rgba(34,211,238,0.4);border-radius:16px;padding:16px;margin-bottom:16px}
+.advice-label{font-size:11px;color:#22d3ee;font-weight:700;margin-bottom:6px}
+.advice-text{font-size:14px;color:#e2e8f0;line-height:1.7}
+.result-card{background:#1e293b;border-radius:16px;padding:16px;margin-bottom:12px;border:1px solid #334155}
+.rank-badge{background:#22d3ee;color:#0f172a;font-size:11px;font-weight:900;padding:2px 8px;border-radius:10px}
+.match-text{font-size:11px;color:#22d3ee;flex:1}
+.date-text{font-size:11px;color:#64748b}
+.field{margin-top:10px;font-size:13px}
+.field-label{font-size:11px;color:#64748b;margin-bottom:2px}
+.symptom-text{color:#fff;font-weight:600}
+.cause-text{color:#fde047}
+.action-text{color:#86efac}
+.note-text{color:#94a3b8}
+.error-card{background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);border-radius:16px;padding:16px;color:#fca5a5;font-size:14px;line-height:1.6}
+.history-item{background:#1e293b;border-radius:14px;padding:14px;margin-bottom:10px;border:1px solid #334155}
+.history-date{font-size:11px;color:#64748b;margin-bottom:4px;display:flex;align-items:center;gap:6px}
+.history-symptom{font-size:14px;font-weight:700;margin-bottom:4px}
+.history-cause{font-size:12px;color:#94a3b8}
+.empty-wrap{display:flex;flex-direction:column;align-items:center;padding:60px 0;color:#475569;text-align:center}
+.empty-icon{font-size:48px;margin-bottom:12px}
+.import-link{color:#22d3ee;font-size:14px;background:none;border:none;text-decoration:underline;cursor:pointer;margin-top:16px}
+.msg{text-align:center;font-size:14px;font-weight:700;color:#22d3ee;margin-top:12px;padding:12px;background:rgba(34,211,238,0.1);border-radius:10px}
+.msg-error{color:#fca5a5;background:rgba(239,68,68,0.1)}
+.api-input{width:100%;background:#1e293b;border:1px solid #334155;border-radius:12px;padding:12px;color:#fff;font-size:13px;outline:none;margin-bottom:8px;font-family:monospace}
+.api-note{font-size:11px;color:#64748b;margin-bottom:16px;line-height:1.8}
+.settings-btn{position:absolute;right:0;top:calc(env(safe-area-inset-top,24px) + 8px);background:none;border:none;color:#64748b;font-size:20px;cursor:pointer}
+.home-header{position:relative;padding-top:8px}
+#file-input{display:none}
+.upload-zone{border:2px dashed #334155;border-radius:16px;padding:28px 16px;text-align:center;margin-bottom:16px;cursor:pointer}
+.upload-zone-icon{font-size:36px;margin-bottom:8px}
+.upload-zone-text{color:#94a3b8;font-size:14px}
+.upload-zone-sub{color:#475569;font-size:12px;margin-top:4px}
+.pdf-queue{margin-bottom:16px}
+.pdf-item{display:flex;align-items:center;gap:10px;background:#1e293b;border-radius:12px;padding:12px;margin-bottom:8px}
+.pdf-name{font-size:13px;color:#e2e8f0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pdf-status{font-size:11px;font-weight:700;white-space:nowrap}
+.pdf-status.waiting{color:#64748b}
+.pdf-status.processing{color:#22d3ee}
+.pdf-status.confirming{color:#fde047}
+.pdf-status.done{color:#86efac}
+.pdf-status.error{color:#fca5a5}
+.pdf-remove{background:none;border:none;color:#475569;font-size:16px;cursor:pointer}
+.progress-bar{height:4px;background:#1e293b;border-radius:2px;margin-bottom:12px;overflow:hidden}
+.progress-fill{height:100%;background:#22d3ee;border-radius:2px;transition:width 0.3s}
+.section-label{font-size:11px;color:#64748b;font-weight:700;margin-bottom:8px}
+.confirm-card{background:#1e293b;border-radius:16px;padding:16px;margin-bottom:12px;border:2px solid rgba(253,224,71,0.4)}
+.confirm-header{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.confirm-badge{background:rgba(253,224,71,0.2);color:#fde047;font-size:11px;font-weight:700;padding:3px 10px;border-radius:10px}
+.confirm-filename{font-size:12px;color:#64748b;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.field-row{margin-bottom:10px}
+.field-row-label{font-size:11px;color:#64748b;margin-bottom:3px}
+.confirm-note{font-size:11px;color:#64748b;text-align:center;margin-bottom:12px}
+.filter-wrap{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+.filter-btn{padding:6px 12px;border-radius:20px;font-size:12px;font-weight:700;border:1.5px solid #334155;background:transparent;color:#64748b;cursor:pointer;font-family:inherit}
+.filter-btn.active{background:#22d3ee;border-color:#22d3ee;color:#0f172a}
+.jurisdiction-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;margin-left:4px}
+.j-三高{background:rgba(34,211,238,0.15);color:#22d3ee}
+.j-沖{background:rgba(0,255,157,0.15);color:#00ff9d}
+.j-中田{background:rgba(253,224,71,0.15);color:#fde047}
+.j-鹿川{background:rgba(249,168,212,0.15);color:#f9a8d4}
+.j-不明{background:rgba(100,116,139,0.15);color:#64748b}
+select.edit-select{width:100%;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:8px 10px;color:#fff;font-size:13px;outline:none;font-family:inherit;margin-bottom:2px}
+
+/* 2段階検索インジケーター */
+.stage-indicator{display:flex;align-items:center;gap:8px;background:#1e293b;border-radius:12px;padding:12px 14px;margin-bottom:14px;border:1px solid #334155}
+.stage-dot{width:8px;height:8px;border-radius:50%;background:#334155;flex-shrink:0;transition:all 0.3s}
+.stage-dot.active{background:#22d3ee;box-shadow:0 0 8px #22d3ee88}
+.stage-dot.done{background:#86efac}
+.stage-line{height:1px;flex:1;background:#334155}
+.stage-label{font-size:10px;color:#64748b;white-space:nowrap}
+.stage-label.active{color:#22d3ee;font-weight:700}
+.stage-label.done{color:#86efac}
+
+/* 絞り込み結果バッジ */
+.filter-result-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(134,239,172,0.15);border:1px solid rgba(134,239,172,0.3);border-radius:10px;padding:4px 10px;font-size:11px;color:#86efac;margin-bottom:12px}
+</style>
+</head>
+<body>
+
+<!-- HOME -->
+<div id="screen-home" class="screen active">
+  <div class="home-header">
+    <button class="settings-btn" onclick="showScreen('settings')">⚙️</button>
+    <div class="badge">FACILITY AI</div>
+    <h1>トラブル<br>類似事例検索</h1>
+    <p class="sub">2段階検索で1600件も高速・低コストに対応</p>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">登録済み事例</div>
+    <div><span class="stat-num" id="record-count">0</span><span class="stat-unit">件</span></div>
+  </div>
+  <div id="home-api-status" style="font-size:12px;text-align:center;margin-bottom:12px;padding:8px;border-radius:10px"></div>
+  <div id="home-api-status" style="font-size:12px;text-align:center;margin-bottom:12px;padding:8px;border-radius:10px"></div>
+  <button class="btn btn-primary" onclick="showScreen('search')">🔍　トラブルを検索する</button>
+  <button class="btn btn-secondary" onclick="showScreen('import')">📄　報告書PDFを取り込む</button>
+  <button class="btn btn-secondary" onclick="showScreen('history')">📋　登録済み事例一覧</button>
+  <div style="text-align:center;color:#334155;font-size:11px;margin-top:auto;padding-top:20px">三高・沖・中田・鹿川 浄化センター対応</div>
+</div>
+
+<!-- SETTINGS -->
+<div id="screen-settings" class="screen">
+  <button class="back-btn" onclick="showScreen('home')">← 戻る</button>
+  <h2>設定</h2>
+  <p class="sub">Anthropic APIキーを登録してください</p>
+  <div class="card">
+    <div class="api-note">📌 取得先：<strong>console.anthropic.com</strong><br>「sk-ant-」で始まる文字列です。</div>
+    <div id="api-key-status" style="font-size:12px;margin-bottom:10px;font-weight:700"></div>
+    <input class="api-input" type="password" id="api-key-input" placeholder="新しいAPIキーを入力（sk-ant-...）">
+    <button class="btn btn-primary" onclick="saveApiKey()">💾　保存する</button>
+    <div id="api-save-msg"></div>
+  </div>
+
+  <!-- バックアップ・復元 -->
+  <div class="card" style="border-color:rgba(134,239,172,0.3)">
+    <div style="font-size:12px;color:#86efac;font-weight:700;margin-bottom:8px">💾 データのバックアップ・復元</div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:12px;line-height:1.8">
+      バックアップ：データをJSONファイルで保存<br>
+      復元：JSONファイルを読み込んで即座に復元<br>
+      ※ 復元はAPIコスト不要・無料
+    </div>
+    <button class="btn btn-secondary" style="border-color:rgba(134,239,172,0.4);color:#86efac" onclick="backupData()">📤　バックアップをダウンロード</button>
+    <button class="btn btn-secondary" style="border-color:rgba(34,211,238,0.4);color:#22d3ee" onclick="document.getElementById('restore-input').click()">📥　バックアップから復元</button>
+    <input type="file" id="restore-input" accept=".json" style="display:none" onchange="restoreData(event)">
+    <div id="backup-msg"></div>
+  </div>
+
+  <div class="card" style="border-color:rgba(239,68,68,0.3)">
+    <div style="font-size:12px;color:#94a3b8;margin-bottom:12px">⚠️ 登録済みの事例データをすべて削除します</div>
+    <button class="btn btn-danger" onclick="clearAllData()">データをすべて削除する</button>
+  </div>
+</div>
+
+<!-- IMPORT -->
+<div id="screen-import" class="screen">
+  <button class="back-btn" onclick="showScreen('home')">← 戻る</button>
+  <h2>報告書を取り込む</h2>
+  <p class="sub">PDFをアップロードするとAIが内容を読み取ります</p>
+
+  <!-- Brave警告 -->
+  <div class="card" style="border-color:rgba(253,224,71,0.4);margin-bottom:12px;padding:12px">
+    <div style="font-size:12px;color:#fde047;font-weight:700;margin-bottom:4px">⚠️ Braveブラウザをご利用の場合</div>
+    <div style="font-size:11px;color:#94a3b8;line-height:1.8">
+      アドレスバー右の🦁アイコンをタップ<br>
+      →「Braveシールド」をオフにしてください<br>
+      ※オフにしないとAPIへの通信がブロックされます
+    </div>
+  </div>
+
+  <!-- Android複数選択説明 -->
+  <div class="card" style="border-color:rgba(34,211,238,0.3);margin-bottom:12px;padding:12px">
+    <div style="font-size:12px;color:#22d3ee;font-weight:700;margin-bottom:4px">📱 複数ファイルの選択方法（Android）</div>
+    <div style="font-size:11px;color:#94a3b8;line-height:1.8">
+      1回の選択で複数選べない場合は<br>
+      → 何度もタップして1件ずつ追加できます<br>
+      → 追加するたびにリストに積み重なります
+    </div>
+  </div>
+
+  <div class="upload-zone" onclick="document.getElementById('file-input').click()">
+    <div class="upload-zone-icon">📄</div>
+    <div class="upload-zone-text">PDFをタップして選択・追加</div>
+    <div class="upload-zone-sub">複数ファイル対応・新旧フォーマット対応</div>
+  </div>
+  <input type="file" id="file-input" accept=".pdf" multiple onchange="handleFiles(event)">
+  <div id="selected-count" style="display:none;text-align:center;font-size:13px;color:#22d3ee;font-weight:700;margin-bottom:10px"></div>
+  <div class="pdf-queue" id="pdf-queue"></div>
+  <div id="progress-wrap" style="display:none">
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+    <div style="font-size:12px;color:#94a3b8;text-align:center;margin-bottom:12px" id="progress-text"></div>
+  </div>
+  <button class="btn btn-primary" id="import-btn" onclick="startImport()" disabled>🤖　AIで読み取り開始</button>
+  <button class="btn btn-secondary" onclick="loadSample()">🧪　サンプルデータで試す</button>
+  <div id="import-msg"></div>
+</div>
+
+<!-- CONFIRM -->
+<div id="screen-confirm" class="screen">
+  <button class="back-btn" onclick="showScreen('import')">← インポートに戻る</button>
+  <h2>読み取り結果の確認</h2>
+  <p class="sub">内容を確認・修正してから登録してください</p>
+  <div class="confirm-note">✏️ タップして直接編集できます</div>
+  <div id="confirm-list"></div>
+  <button class="btn btn-primary" onclick="saveConfirmed()">✅　すべて登録する</button>
+  <div id="confirm-msg"></div>
+</div>
+
+<!-- SEARCH -->
+<div id="screen-search" class="screen">
+  <button class="back-btn" onclick="showScreen('home')">← 戻る</button>
+  <h2>トラブル検索</h2>
+  <p class="sub">症状を入力してください</p>
+
+  <!-- 管轄フィルター -->
+  <div style="font-size:10px;color:#64748b;margin-bottom:6px">管轄で絞り込む（任意）</div>
+  <div class="filter-wrap" id="search-filter">
+    <button class="filter-btn active" onclick="setSearchFilter('全て',this)">全て</button>
+    <button class="filter-btn" onclick="setSearchFilter('三高',this)">三高</button>
+    <button class="filter-btn" onclick="setSearchFilter('沖',this)">沖</button>
+    <button class="filter-btn" onclick="setSearchFilter('中田',this)">中田</button>
+    <button class="filter-btn" onclick="setSearchFilter('鹿川',this)">鹿川</button>
+  </div>
+
+  <textarea id="query-input" rows="4" placeholder="例：受槽ブロワがトリップした&#10;例：最終沈殿池の水が濁っている&#10;例：DO値が急に下がった"></textarea>
+  <div class="tags" id="tag-list"></div>
+
+  <!-- 2段階検索の説明 -->
+  <div class="card" style="margin-bottom:16px;padding:12px">
+    <div style="font-size:11px;color:#64748b;margin-bottom:8px">🔍 2段階検索のしくみ</div>
+    <div style="font-size:12px;color:#94a3b8;line-height:1.8">
+      ① キーワード絞り込み（無料・高速）<br>
+      ② AIが類似事例を分析（精度◎）
+    </div>
+  </div>
+
+  <button class="btn btn-primary" id="search-btn" onclick="handleSearch()" disabled>🔍　AIで類似事例を探す</button>
+</div>
+
+<!-- RESULT -->
+<div id="screen-result" class="screen">
+  <button class="back-btn" onclick="showScreen('search')">← 検索に戻る</button>
+  <h2>検索結果</h2>
+  <div id="query-display" class="sub"></div>
+  <div id="stage-indicator-wrap"></div>
+  <div id="result-content"></div>
+</div>
+
+<!-- HISTORY -->
+<div id="screen-history" class="screen">
+  <button class="back-btn" onclick="showScreen('home')">← 戻る</button>
+  <h2>登録済み事例</h2>
+  <div class="filter-wrap" id="history-filter">
+    <button class="filter-btn active" onclick="setHistoryFilter('全て',this)">全て</button>
+    <button class="filter-btn" onclick="setHistoryFilter('三高',this)">三高</button>
+    <button class="filter-btn" onclick="setHistoryFilter('沖',this)">沖</button>
+    <button class="filter-btn" onclick="setHistoryFilter('中田',this)">中田</button>
+    <button class="filter-btn" onclick="setHistoryFilter('鹿川',this)">鹿川</button>
+  </div>
+  <div id="history-count" class="sub"></div>
+  <div id="history-list"></div>
+</div>
+
+<script>
+// ── PWA ────────────────────────────────────────────
+const mf={name:"浄化センター トラブル検索",short_name:"トラブル検索",start_url:"./",display:"standalone",background_color:"#0f172a",theme_color:"#0f172a",icons:[{src:"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%230f172a'/><text y='130' x='96' font-size='110' text-anchor='middle'>🔧</text></svg>",sizes:"192x192",type:"image/svg+xml"}]};
+document.getElementById('manifest-link').href=URL.createObjectURL(new Blob([JSON.stringify(mf)],{type:'application/json'}));
+
+// ── Storage ────────────────────────────────────────
+const STORAGE_KEY='trouble_records_v4';
+const API_KEY_KEY='anthropic_api_key';
+function getRecords(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]')}catch{return[]}}
+function saveRecords(d){localStorage.setItem(STORAGE_KEY,JSON.stringify(d));updateCount()}
+function getApiKey(){return localStorage.getItem(API_KEY_KEY)||''}
+function saveApiKey(){
+  const k=document.getElementById('api-key-input').value.trim();
+  if(!k)return;
+  // 表示用に短縮された値（...付き）はそのまま保存しない
+  if(k.endsWith('...')){
+    document.getElementById('api-save-msg').innerHTML='<div class="msg msg-error">❌ 新しいAPIキーを入力してから保存してください</div>';
+    setTimeout(()=>document.getElementById('api-save-msg').innerHTML='',2500);
+    return;
+  }
+  // sk-ant- で始まるか簡易チェック
+  if(!k.startsWith('sk-ant-')){
+    document.getElementById('api-save-msg').innerHTML='<div class="msg msg-error">❌ APIキーは「sk-ant-」で始まる文字列です</div>';
+    setTimeout(()=>document.getElementById('api-save-msg').innerHTML='',2500);
+    return;
+  }
+  localStorage.setItem(API_KEY_KEY,k);
+  document.getElementById('api-save-msg').innerHTML='<div class="msg">✅ 保存しました</div>';
+  setTimeout(()=>{document.getElementById('api-save-msg').innerHTML='';showScreen('home')},1500);
+}
+function updateCount(){
+  document.getElementById('record-count').textContent=getRecords().length;
+  // ホーム画面のAPIキー状態表示
+  const apiStatus=document.getElementById('home-api-status');
+  if(apiStatus){
+    const k=getApiKey();
+    if(k){
+      apiStatus.textContent='✅ APIキー登録済み';
+      apiStatus.style.background='rgba(134,239,172,0.1)';
+      apiStatus.style.color='#86efac';
+    }else{
+      apiStatus.textContent='⚠️ APIキー未登録 → ⚙️設定から登録してください';
+      apiStatus.style.background='rgba(253,224,71,0.1)';
+      apiStatus.style.color='#fde047';
+    }
+  }
+}
+
+// ── Navigation ─────────────────────────────────────
+let activeSearchFilter='全て';
+let activeHistoryFilter='全て';
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+id).classList.add('active');
+  window.scrollTo(0,0);
+  if(id==='home'){updateCount()}
+  if(id==='history')renderHistory();
+  if(id==='settings'){
+    const k=getApiKey();
+    document.getElementById('api-key-input').value=''; // 常に空にして新規入力を促す
+    document.getElementById('api-key-status').textContent=k ? '✅ 登録済み（'+k.slice(0,10)+'...）' : '⚠️ 未登録';
+    document.getElementById('api-key-status').style.color=k ? '#86efac' : '#fca5a5';
+  }
+}
+function setSearchFilter(v,btn){
+  activeSearchFilter=v;
+  document.querySelectorAll('#search-filter .filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+function setHistoryFilter(v,btn){
+  activeHistoryFilter=v;
+  document.querySelectorAll('#history-filter .filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderHistory();
+}
+
+// ── 
