@@ -359,4 +359,257 @@ function setHistoryFilter(v,btn){
   renderHistory();
 }
 
-// ── 
+// ── PDF Import ─────────────────────────────────────
+let pdfQueue=[];
+let pendingConfirm=[];
+
+function handleFiles(e){
+  Array.from(e.target.files).forEach(f=>{
+    if(!pdfQueue.find(p=>p.name===f.name)) pdfQueue.push({file:f,name:f.name,status:'waiting'});
+  });
+  renderQueue();
+  const countEl=document.getElementById('selected-count');
+  if(pdfQueue.length>0){
+    countEl.style.display='block';
+    countEl.textContent=`📄 ${pdfQueue.length}件 選択中`;
+  }else{
+    countEl.style.display='none';
+  }
+  document.getElementById('import-btn').disabled=pdfQueue.length===0;
+  e.target.value='';
+}
+function removeFromQueue(name){
+  pdfQueue=pdfQueue.filter(p=>p.name!==name);
+  renderQueue();
+  document.getElementById('import-btn').disabled=pdfQueue.length===0;
+}
+function renderQueue(){
+  const q=document.getElementById('pdf-queue');
+  if(pdfQueue.length===0){q.innerHTML='';return}
+  const sl={waiting:'待機中',processing:'読み取り中...',confirming:'確認待ち',done:'✅ 登録済み',error:'❌ エラー'};
+  q.innerHTML=pdfQueue.map(p=>{
+    const label = p.statusLabel || sl[p.status] || sl['waiting'];
+    return `<div class="pdf-item"><span>📄</span><span class="pdf-name">${p.name}</span><span class="pdf-status ${p.status}">${label}</span>${p.status==='waiting'?`<button class="pdf-remove" onclick="removeFromQueue('${p.name.replace(/'/g,"\\'")}')">✕</button>`:''}</div>`;
+  }).join('');
+}
+function updatePdfStatus(name,status){const p=pdfQueue.find(p=>p.name===name);if(p)p.status=status;renderQueue()}
+function fileToBase64(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result.split(',')[1]);r.onerror=()=>rej(new Error('読み込み失敗'));r.readAsDataURL(file)})}
+
+async function startImport(){
+  const apiKey=getApiKey();
+  if(!apiKey){document.getElementById('import-msg').innerHTML='<div class="msg msg-error">❌ APIキーが未設定です</div>';return}
+  const waiting=pdfQueue.filter(p=>p.status==='waiting');
+  if(waiting.length===0)return;
+  document.getElementById('import-btn').disabled=true;
+  document.getElementById('progress-wrap').style.display='block';
+  pendingConfirm=[];
+  let done=0;
+  for(const item of waiting){
+    updatePdfStatus(item.name,'processing');
+    document.getElementById('progress-text').textContent=`読み取り中... (${done+1}/${waiting.length})`;
+    document.getElementById('progress-fill').style.width=`${(done/waiting.length)*100}%`;
+    try{
+      const base64=await fileToBase64(item.file);
+      const extracted=await extractFromPdf(base64,apiKey,item.name);
+      if(extracted && extracted.length>0){
+        extracted.forEach((rec,idx)=>{
+          pendingConfirm.push({
+            ...rec,
+            _filename: extracted.length>1 ? `${item.name}（${idx+1}件目）` : item.name
+          });
+        });
+        const p=pdfQueue.find(p=>p.name===item.name);
+        if(p) p.statusLabel = extracted.length>1 ? `確認待ち（${extracted.length}件）` : '確認待ち';
+        updatePdfStatus(item.name,'confirming');
+      } else {
+        updatePdfStatus(item.name,'error');
+      }
+    }catch(e){
+      const errMsg = e.message.includes('fetch')
+        ? 'ネットワークエラー。Braveシールドをオフにして再試行してください'
+        : e.message.slice(0,50);
+      updatePdfStatus(item.name,'error');
+      const p=pdfQueue.find(p=>p.name===item.name);
+      if(p) p.statusLabel=`❌ ${errMsg}`;
+      renderQueue();
+    }
+    done++;
+  }
+  document.getElementById('progress-fill').style.width='100%';
+  document.getElementById('progress-wrap').style.display='none';
+  if(pendingConfirm.length>0){renderConfirm();showScreen('confirm');
+    document.querySelector('#screen-confirm .sub').textContent=`${pendingConfirm.length}件を抽出しました。内容を確認・修正してから登録してください`;
+  }
+  else{document.getElementById('import-msg').innerHTML='<div class="msg msg-error">❌ 読み取れませんでした</div>';document.getElementById('import-btn').disabled=false}
+}
+
+async function extractFromPdf(base64,apiKey,filename){
+  const prompt=`あなたは浄化センターの機器異常報告書を読み取るAIです。
+このPDFには新旧どちらかの様式の報告書が含まれています。すべての報告書を抽出してください。
+
+【新旧様式の対応】
+新様式            → 旧様式
+機器名称          → 設備名
+異常・故障        → 故障・異常内容
+発見方法          → 発見経緯
+状況              → 故障・異常内容（詳細文章）
+推定原因          → 原因
+措置対策          → 修理・応急措置
+発生年月日        → 発生日時
+
+【管轄の判定】
+三高浄化センター・三高管轄ポンプ場 → 「三高」
+沖浄化センター・沖管轄ポンプ場     → 「沖」
+中田浄化センター・中田管轄ポンプ場 → 「中田」
+鹿川浄化センター・鹿川管轄ポンプ場 → 「鹿川」
+不明                               → 「不明」
+
+すべての報告書をJSON配列形式のみで返してください（前置き・説明文・マークダウン記号は一切不要）：
+[{"date":"","facility":"","jurisdiction":"","equipment":"","reporter":"","symptom":"","location":"","discovery":"","situation":"","cause":"","action":"","note":""}]
+
+複数件ある場合は配列に複数含めてください。情報が不明な項目は空文字にしてください。`;
+
+  const res=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'x-api-key':apiKey,
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true'
+    },
+    body:JSON.stringify({
+      model:'claude-sonnet-4-20250514',
+      max_tokens:3000,
+      messages:[{role:'user',content:[
+        {type:'document',source:{type:'base64',media_type:'application/pdf',data:base64}},
+        {type:'text',text:prompt}
+      ]}]
+    })
+  });
+  const data=await res.json();
+  if(data.error)throw new Error(`(${data.error.type}) ${data.error.message}`);
+  const text=(data.content||[]).map(c=>c.text||'').join('').replace(/```json|```/g,'').trim();
+  let parsed;
+  try{ parsed=JSON.parse(text); }
+  catch(e){ throw new Error('JSON解析失敗: '+text.slice(0,50)); }
+  return Array.isArray(parsed) ? parsed : [parsed];
+}
+
+// ── Confirm ────────────────────────────────────────
+const FIELD_LABELS={date:'発生日時',facility:'施設名',jurisdiction:'管轄',equipment:'機器名称',reporter:'報告者',symptom:'異常・故障',location:'発生場所',discovery:'発見方法',situation:'状況',cause:'推定原因',action:'措置対策',note:'備考'};
+const FIELD_KEYS=Object.keys(FIELD_LABELS);
+const MULTILINE=['situation','cause','action','note'];
+const JURISDICTIONS=['三高','沖','中田','鹿川','不明'];
+
+function renderConfirm(){
+  document.getElementById('confirm-list').innerHTML=pendingConfirm.map((item,i)=>`
+    <div class="confirm-card">
+      <div class="confirm-header">
+        <span class="confirm-badge">📄 ${i+1}件目</span>
+        <span class="jurisdiction-badge j-${item.jurisdiction||'不明'}">${item.jurisdiction||'不明'}</span>
+        <span class="confirm-filename">${item._filename}</span>
+      </div>
+      ${FIELD_KEYS.map(key=>{
+        if(key==='jurisdiction') return `<div class="field-row"><div class="field-row-label">${FIELD_LABELS[key]}</div><select class="edit-select" onchange="updatePending(${i},'${key}',this.value)">${JURISDICTIONS.map(j=>`<option value="${j}" ${(item[key]||'不明')===j?'selected':''}>${j}管轄</option>`).join('')}</select></div>`;
+        if(MULTILINE.includes(key)) return `<div class="field-row"><div class="field-row-label">${FIELD_LABELS[key]}</div><textarea rows="3" oninput="updatePending(${i},'${key}',this.value)">${item[key]||''}</textarea></div>`;
+        return `<div class="field-row"><div class="field-row-label">${FIELD_LABELS[key]}</div><input class="edit-input" type="text" value="${(item[key]||'').replace(/"/g,'&quot;')}" oninput="updatePending(${i},'${key}',this.value)"></div>`;
+      }).join('')}
+    </div>`).join('');
+}
+function updatePending(i,key,value){pendingConfirm[i][key]=value}
+function saveConfirmed(){
+  const existing=getRecords();
+  const merged=[...existing,...pendingConfirm.map((r,i)=>({...r,id:existing.length+i+1,_filename:undefined}))];
+  saveRecords(merged);
+  pdfQueue=pdfQueue.map(p=>({...p,status:p.status==='confirming'?'done':p.status}));
+  document.getElementById('confirm-msg').innerHTML=`<div class="msg">✅ ${pendingConfirm.length}件を登録しました（合計${merged.length}件）</div>`;
+  setTimeout(()=>{document.getElementById('confirm-msg').innerHTML='';pendingConfirm=[];showScreen('home')},2000);
+}
+
+// ── Sample ─────────────────────────────────────────
+const SAMPLE=[
+  {id:1,date:'令和8年3月21日 0時40分',facility:'三高浄化センター',jurisdiction:'三高',equipment:'受槽ブロワ',reporter:'石田',symptom:'過電流によるサーマルリレー作動',cause:'ベアリング経年劣化による負荷増大',action:'バルブ操作でバイパス運用。3/24更新工事完了。',situation:'起動直後に電流値が異常上昇し再トリップ。以前より異音あり。',location:'三高浄化センター',discovery:'通報',note:''},
+  {id:2,date:'2024/6/15',facility:'三高浄化センター',jurisdiction:'三高',equipment:'汚泥ポンプ',reporter:'',symptom:'最終沈殿池の上澄みが濁っている',cause:'汚泥の膨化（バルキング）・糸状菌の増殖',action:'汚泥引き抜き量増加。DO管理強化。塩素注入。',situation:'',location:'',discovery:'',note:'3日後に回復。夏場に多い。'},
+  {id:3,date:'2024/1/22',facility:'三高浄化センター',jurisdiction:'三高',equipment:'散気管・送風機',reporter:'',symptom:'曝気槽のDO値が急激に低下',cause:'散気管の目詰まり。送風機フィルター汚れ。',action:'送風機フィルター清掃。散気管洗浄を計画。',situation:'',location:'',discovery:'',note:'DO計の校正も実施。'},
+  {id:4,date:'2023/11/8',facility:'沖浄化センター',jurisdiction:'沖',equipment:'流量計',reporter:'',symptom:'流量計の値が異常に高い数値を示している',cause:'流量計内部への異物混入と電極の汚れ。',action:'流量計洗浄・電極交換。',situation:'',location:'',discovery:'',note:'半年に1回の定期清掃を推奨。'},
+  {id:5,date:'2023/8/30',facility:'中田浄化センター',jurisdiction:'中田',equipment:'塩素注入ポンプ',reporter:'',symptom:'消毒後の大腸菌数が基準値超え',cause:'塩素注入ポンプの流量設定ミス。',action:'注入ポンプのキャリブレーション実施。注入量を修正。',situation:'',location:'',discovery:'',note:'月1回のキャリブレーション確認を徹底。'},
+  {id:6,date:'2022/5/10',facility:'4号中小路ポンプ場',jurisdiction:'三高',equipment:'№2ポンプ',reporter:'上林',symptom:'過負荷異常。電流値通常3Aのところ7Aで運転。',cause:'布がポンプの羽根に絡まり過負荷。',action:'ポンプ吊り上げ・布除去。',situation:'OCランプ点灯。モーターリレーにOC（過負荷）のランプ点灯。',location:'4号中小路ポンプ場',discovery:'警報通知',note:'最近布等の流入でポンプの過負荷異常が多い。対策が必要。'}
+];
+function loadSample(){
+  saveRecords(SAMPLE);
+  document.getElementById('import-msg').innerHTML='<div class="msg">✅ サンプルデータ（6件）を読み込みました！</div>';
+  setTimeout(()=>{document.getElementById('import-msg').innerHTML='';showScreen('home')},1800);
+}
+
+// ══════════════════════════════════════════════════
+// ★★★ 2段階検索ロジック ★★★
+// ══════════════════════════════════════════════════
+
+// ── Stage1: キーワード絞り込み（無料・高速）────────
+function keywordFilter(records, query, maxResults=60) {
+  // クエリをスペース・読点で分割してキーワード配列に
+  const keywords = query
+    .replace(/[、。　・,，.]/g, ' ')
+    .split(/\s+/)
+    .filter(k => k.length >= 1)
+    .map(k => k.toLowerCase());
+
+  if(keywords.length === 0) return records.slice(0, maxResults);
+
+  // 各レコードのスコアを計算
+  const scored = records.map(r => {
+    const text = [
+      r.symptom, r.cause, r.action, r.situation,
+      r.equipment, r.note, r.facility, r.location
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    let score = 0;
+    for(const kw of keywords) {
+      if(text.includes(kw)) {
+        // 症状・機器名のヒットは高スコア
+        const symptomText = (r.symptom||'').toLowerCase();
+        const equipText   = (r.equipment||'').toLowerCase();
+        if(symptomText.includes(kw)) score += 5;
+        else if(equipText.includes(kw)) score += 3;
+        else score += 1;
+      }
+    }
+    return { record: r, score };
+  });
+
+  // スコア順にソートして上位maxResultsを返す
+  return scored
+    .filter(s => s.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, maxResults)
+    .map(s => s.record);
+}
+
+// ── Search タグ・ボタン ────────────────────────────
+const TAGS=['ブロワトリップ','ポンプ異常','DO低下','水が濁る','流量計異常','電流上昇','悪臭発生','サーマルリレー'];
+document.getElementById('tag-list').innerHTML=TAGS.map(t=>`<button class="tag" onclick="setQuery('${t}')">${t}</button>`).join('');
+function setQuery(t){document.getElementById('query-input').value=t;updateSearchBtn()}
+document.getElementById('query-input').addEventListener('input',updateSearchBtn);
+function updateSearchBtn(){document.getElementById('search-btn').disabled=!document.getElementById('query-input').value.trim()}
+
+// ── メイン検索処理 ────────────────────────────────
+async function handleSearch(){
+  const query=document.getElementById('query-input').value.trim();
+  let records=getRecords();
+
+  // 管轄フィルター
+  if(activeSearchFilter!=='全て') records=records.filter(r=>(r.jurisdiction||'不明')===activeSearchFilter);
+
+  showScreen('result');
+  document.getElementById('query-display').textContent='「'+query+'」'+(activeSearchFilter!=='全て'?' ／ '+activeSearchFilter+'管轄':'');
+  const content=document.getElementById('result-content');
+  const indicator=document.getElementById('stage-indicator-wrap');
+
+  if(records.length===0){
+    indicator.innerHTML='';
+    content.innerHTML='<div class="error-card">該当する事例データがありません。</div>';
+    return;
+  }
+
+  const apiKey=getApiKey();
+  
