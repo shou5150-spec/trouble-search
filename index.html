@@ -103,6 +103,8 @@ input.edit-input:focus{border-color:#22d3ee}
 .j-鹿川{background:rgba(249,168,212,0.15);color:#f9a8d4}
 .j-不明{background:rgba(100,116,139,0.15);color:#64748b}
 select.edit-select{width:100%;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:8px 10px;color:#fff;font-size:13px;outline:none;font-family:inherit;margin-bottom:2px}
+
+/* 2段階検索インジケーター */
 .stage-indicator{display:flex;align-items:center;gap:8px;background:#1e293b;border-radius:12px;padding:12px 14px;margin-bottom:14px;border:1px solid #334155}
 .stage-dot{width:8px;height:8px;border-radius:50%;background:#334155;flex-shrink:0;transition:all 0.3s}
 .stage-dot.active{background:#22d3ee;box-shadow:0 0 8px #22d3ee88}
@@ -111,19 +113,9 @@ select.edit-select{width:100%;background:#0f172a;border:1px solid #334155;border
 .stage-label{font-size:10px;color:#64748b;white-space:nowrap}
 .stage-label.active{color:#22d3ee;font-weight:700}
 .stage-label.done{color:#86efac}
+
+/* 絞り込み結果バッジ */
 .filter-result-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(134,239,172,0.15);border:1px solid rgba(134,239,172,0.3);border-radius:10px;padding:4px 10px;font-size:11px;color:#86efac;margin-bottom:12px}
-.search-hist-item{background:#1e293b;border-radius:14px;padding:14px;margin-bottom:10px;border:1px solid #334155;cursor:pointer}
-.search-hist-item:active{opacity:0.7}
-.search-hist-query{font-size:14px;font-weight:700;margin-bottom:4px;color:#fff}
-.search-hist-meta{font-size:11px;color:#64748b;margin-bottom:8px}
-.search-hist-advice{font-size:12px;color:#94a3b8;line-height:1.6;margin-bottom:8px;padding:8px;background:rgba(34,211,238,0.07);border-radius:8px}
-.search-hist-results{font-size:12px;color:#64748b}
-.search-hist-result-row{display:flex;align-items:flex-start;gap:6px;margin-bottom:6px;padding:8px;background:#0f172a;border-radius:8px}
-.shi-rank{background:#22d3ee;color:#0f172a;font-size:10px;font-weight:900;padding:1px 6px;border-radius:8px;flex-shrink:0;margin-top:1px}
-.shi-body{flex:1}
-.shi-symptom{font-size:12px;color:#e2e8f0;font-weight:600}
-.shi-cause{font-size:11px;color:#fde047;margin-top:2px}
-.shi-action{font-size:11px;color:#86efac;margin-top:2px}
 </style>
 </head>
 <body>
@@ -134,15 +126,15 @@ select.edit-select{width:100%;background:#0f172a;border:1px solid #334155;border
     <button class="settings-btn" onclick="showScreen('settings')">⚙️</button>
     <div class="badge">FACILITY AI</div>
     <h1>トラブル<br>類似事例検索</h1>
-    <p class="sub"></p>
+    <p class="sub">2段階検索で1600件も高速・低コストに対応</p>
   </div>
   <div class="stat-card">
     <div class="stat-label">登録済み事例</div>
     <div><span class="stat-num" id="record-count">0</span><span class="stat-unit">件</span></div>
   </div>
   <div id="home-api-status" style="font-size:12px;text-align:center;margin-bottom:12px;padding:8px;border-radius:10px"></div>
+  <div id="home-api-status" style="font-size:12px;text-align:center;margin-bottom:12px;padding:8px;border-radius:10px"></div>
   <button class="btn btn-primary" onclick="showScreen('search')">🔍　トラブルを検索する</button>
-  <button class="btn btn-secondary" onclick="showScreen('search-hist')">🕐　過去の検索結果（直近5件）</button>
   <button class="btn btn-secondary" onclick="showScreen('import')">📄　報告書PDFを取り込む</button>
   <button class="btn btn-secondary" onclick="showScreen('history')">📋　登録済み事例一覧</button>
   <div style="text-align:center;color:#334155;font-size:11px;margin-top:auto;padding-top:20px">三高・沖・中田・鹿川 浄化センター対応</div>
@@ -160,6 +152,8 @@ select.edit-select{width:100%;background:#0f172a;border:1px solid #334155;border
     <button class="btn btn-primary" onclick="saveApiKey()">💾　保存する</button>
     <div id="api-save-msg"></div>
   </div>
+
+  <!-- バックアップ・復元 -->
   <div class="card" style="border-color:rgba(134,239,172,0.3)">
     <div style="font-size:12px;color:#86efac;font-weight:700;margin-bottom:8px">💾 データのバックアップ・復元</div>
     <div style="font-size:11px;color:#64748b;margin-bottom:12px;line-height:1.8">
@@ -172,6 +166,7 @@ select.edit-select{width:100%;background:#0f172a;border:1px solid #334155;border
     <input type="file" id="restore-input" accept=".json" style="display:none" onchange="restoreData(event)">
     <div id="backup-msg"></div>
   </div>
+
   <div class="card" style="border-color:rgba(239,68,68,0.3)">
     <div style="font-size:12px;color:#94a3b8;margin-bottom:12px">⚠️ 登録済みの事例データをすべて削除します</div>
     <button class="btn btn-danger" onclick="clearAllData()">データをすべて削除する</button>
@@ -183,6 +178,27 @@ select.edit-select{width:100%;background:#0f172a;border:1px solid #334155;border
   <button class="back-btn" onclick="showScreen('home')">← 戻る</button>
   <h2>報告書を取り込む</h2>
   <p class="sub">PDFをアップロードするとAIが内容を読み取ります</p>
+
+  <!-- Brave警告 -->
+  <div class="card" style="border-color:rgba(253,224,71,0.4);margin-bottom:12px;padding:12px">
+    <div style="font-size:12px;color:#fde047;font-weight:700;margin-bottom:4px">⚠️ Braveブラウザをご利用の場合</div>
+    <div style="font-size:11px;color:#94a3b8;line-height:1.8">
+      アドレスバー右の🦁アイコンをタップ<br>
+      →「Braveシールド」をオフにしてください<br>
+      ※オフにしないとAPIへの通信がブロックされます
+    </div>
+  </div>
+
+  <!-- Android複数選択説明 -->
+  <div class="card" style="border-color:rgba(34,211,238,0.3);margin-bottom:12px;padding:12px">
+    <div style="font-size:12px;color:#22d3ee;font-weight:700;margin-bottom:4px">📱 複数ファイルの選択方法（Android）</div>
+    <div style="font-size:11px;color:#94a3b8;line-height:1.8">
+      1回の選択で複数選べない場合は<br>
+      → 何度もタップして1件ずつ追加できます<br>
+      → 追加するたびにリストに積み重なります
+    </div>
+  </div>
+
   <div class="upload-zone" onclick="document.getElementById('file-input').click()">
     <div class="upload-zone-icon">📄</div>
     <div class="upload-zone-text">PDFをタップして選択・追加</div>
@@ -216,6 +232,8 @@ select.edit-select{width:100%;background:#0f172a;border:1px solid #334155;border
   <button class="back-btn" onclick="showScreen('home')">← 戻る</button>
   <h2>トラブル検索</h2>
   <p class="sub">症状を入力してください</p>
+
+  <!-- 管轄フィルター -->
   <div style="font-size:10px;color:#64748b;margin-bottom:6px">管轄で絞り込む（任意）</div>
   <div class="filter-wrap" id="search-filter">
     <button class="filter-btn active" onclick="setSearchFilter('全て',this)">全て</button>
@@ -224,8 +242,11 @@ select.edit-select{width:100%;background:#0f172a;border:1px solid #334155;border
     <button class="filter-btn" onclick="setSearchFilter('中田',this)">中田</button>
     <button class="filter-btn" onclick="setSearchFilter('鹿川',this)">鹿川</button>
   </div>
+
   <textarea id="query-input" rows="4" placeholder="例：受槽ブロワがトリップした&#10;例：最終沈殿池の水が濁っている&#10;例：DO値が急に下がった"></textarea>
   <div class="tags" id="tag-list"></div>
+
+  <!-- 2段階検索の説明 -->
   <div class="card" style="margin-bottom:16px;padding:12px">
     <div style="font-size:11px;color:#64748b;margin-bottom:8px">🔍 2段階検索のしくみ</div>
     <div style="font-size:12px;color:#94a3b8;line-height:1.8">
@@ -233,6 +254,7 @@ select.edit-select{width:100%;background:#0f172a;border:1px solid #334155;border
       ② AIが類似事例を分析（精度◎）
     </div>
   </div>
+
   <button class="btn btn-primary" id="search-btn" onclick="handleSearch()" disabled>🔍　AIで類似事例を探す</button>
 </div>
 
@@ -243,14 +265,6 @@ select.edit-select{width:100%;background:#0f172a;border:1px solid #334155;border
   <div id="query-display" class="sub"></div>
   <div id="stage-indicator-wrap"></div>
   <div id="result-content"></div>
-</div>
-
-<!-- SEARCH HISTORY -->
-<div id="screen-search-hist" class="screen">
-  <button class="back-btn" onclick="showScreen('home')">← 戻る</button>
-  <h2>過去の検索結果</h2>
-  <p class="sub">直近5件の検索結果を確認できます</p>
-  <div id="search-hist-list"></div>
 </div>
 
 <!-- HISTORY -->
@@ -269,25 +283,26 @@ select.edit-select{width:100%;background:#0f172a;border:1px solid #334155;border
 </div>
 
 <script>
-// ── PWA ──────────────────────────────────────────
+// ── PWA ────────────────────────────────────────────
 const mf={name:"浄化センター トラブル検索",short_name:"トラブル検索",start_url:"./",display:"standalone",background_color:"#0f172a",theme_color:"#0f172a",icons:[{src:"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%230f172a'/><text y='130' x='96' font-size='110' text-anchor='middle'>🔧</text></svg>",sizes:"192x192",type:"image/svg+xml"}]};
 document.getElementById('manifest-link').href=URL.createObjectURL(new Blob([JSON.stringify(mf)],{type:'application/json'}));
 
-// ── Storage ───────────────────────────────────────
+// ── Storage ────────────────────────────────────────
 const STORAGE_KEY='trouble_records_v4';
 const API_KEY_KEY='anthropic_api_key';
-const SEARCH_HIST_KEY='search_history_v1';
 function getRecords(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]')}catch{return[]}}
 function saveRecords(d){localStorage.setItem(STORAGE_KEY,JSON.stringify(d));updateCount()}
 function getApiKey(){return localStorage.getItem(API_KEY_KEY)||''}
 function saveApiKey(){
   const k=document.getElementById('api-key-input').value.trim();
   if(!k)return;
+  // 表示用に短縮された値（...付き）はそのまま保存しない
   if(k.endsWith('...')){
     document.getElementById('api-save-msg').innerHTML='<div class="msg msg-error">❌ 新しいAPIキーを入力してから保存してください</div>';
     setTimeout(()=>document.getElementById('api-save-msg').innerHTML='',2500);
     return;
   }
+  // sk-ant- で始まるか簡易チェック
   if(!k.startsWith('sk-ant-')){
     document.getElementById('api-save-msg').innerHTML='<div class="msg msg-error">❌ APIキーは「sk-ant-」で始まる文字列です</div>';
     setTimeout(()=>document.getElementById('api-save-msg').innerHTML='',2500);
@@ -299,6 +314,7 @@ function saveApiKey(){
 }
 function updateCount(){
   document.getElementById('record-count').textContent=getRecords().length;
+  // ホーム画面のAPIキー状態表示
   const apiStatus=document.getElementById('home-api-status');
   if(apiStatus){
     const k=getApiKey();
@@ -314,45 +330,7 @@ function updateCount(){
   }
 }
 
-// ── Backup / Restore ──────────────────────────────
-function backupData(){
-  const data={records:getRecords(),exportedAt:new Date().toISOString()};
-  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download='trouble-backup-'+new Date().toISOString().slice(0,10)+'.json';
-  a.click();
-  document.getElementById('backup-msg').innerHTML='<div class="msg">✅ バックアップをダウンロードしました</div>';
-  setTimeout(()=>document.getElementById('backup-msg').innerHTML='',2500);
-}
-function restoreData(e){
-  const file=e.target.files[0];
-  if(!file)return;
-  const reader=new FileReader();
-  reader.onload=ev=>{
-    try{
-      const data=JSON.parse(ev.target.result);
-      const records=data.records||data;
-      if(!Array.isArray(records))throw new Error('形式エラー');
-      saveRecords(records);
-      document.getElementById('backup-msg').innerHTML=`<div class="msg">✅ ${records.length}件を復元しました</div>`;
-      setTimeout(()=>{document.getElementById('backup-msg').innerHTML='';showScreen('home')},1500);
-    }catch(err){
-      document.getElementById('backup-msg').innerHTML='<div class="msg msg-error">❌ 復元に失敗しました</div>';
-      setTimeout(()=>document.getElementById('backup-msg').innerHTML='',2500);
-    }
-  };
-  reader.readAsText(file,'UTF-8');
-  e.target.value='';
-}
-function clearAllData(){
-  if(!confirm('本当にすべてのデータを削除しますか？'))return;
-  localStorage.removeItem(STORAGE_KEY);
-  updateCount();
-  alert('削除しました');
-}
-
-// ── Navigation ────────────────────────────────────
+// ── Navigation ─────────────────────────────────────
 let activeSearchFilter='全て';
 let activeHistoryFilter='全て';
 
@@ -360,14 +338,13 @@ function showScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById('screen-'+id).classList.add('active');
   window.scrollTo(0,0);
-  if(id==='home')updateCount();
+  if(id==='home'){updateCount()}
   if(id==='history')renderHistory();
-  if(id==='search-hist')renderSearchHist();
   if(id==='settings'){
     const k=getApiKey();
-    document.getElementById('api-key-input').value='';
-    document.getElementById('api-key-status').textContent=k?'✅ 登録済み（'+k.slice(0,10)+'...）':'⚠️ 未登録';
-    document.getElementById('api-key-status').style.color=k?'#86efac':'#fca5a5';
+    document.getElementById('api-key-input').value=''; // 常に空にして新規入力を促す
+    document.getElementById('api-key-status').textContent=k ? '✅ 登録済み（'+k.slice(0,10)+'...）' : '⚠️ 未登録';
+    document.getElementById('api-key-status').style.color=k ? '#86efac' : '#fca5a5';
   }
 }
 function setSearchFilter(v,btn){
@@ -382,18 +359,22 @@ function setHistoryFilter(v,btn){
   renderHistory();
 }
 
-// ── PDF Import ────────────────────────────────────
+// ── PDF Import ─────────────────────────────────────
 let pdfQueue=[];
 let pendingConfirm=[];
 
 function handleFiles(e){
   Array.from(e.target.files).forEach(f=>{
-    if(!pdfQueue.find(p=>p.name===f.name))pdfQueue.push({file:f,name:f.name,status:'waiting'});
+    if(!pdfQueue.find(p=>p.name===f.name)) pdfQueue.push({file:f,name:f.name,status:'waiting'});
   });
   renderQueue();
   const countEl=document.getElementById('selected-count');
-  if(pdfQueue.length>0){countEl.style.display='block';countEl.textContent=`📄 ${pdfQueue.length}件 選択中`;}
-  else countEl.style.display='none';
+  if(pdfQueue.length>0){
+    countEl.style.display='block';
+    countEl.textContent=`📄 ${pdfQueue.length}件 選択中`;
+  }else{
+    countEl.style.display='none';
+  }
   document.getElementById('import-btn').disabled=pdfQueue.length===0;
   e.target.value='';
 }
@@ -407,7 +388,7 @@ function renderQueue(){
   if(pdfQueue.length===0){q.innerHTML='';return}
   const sl={waiting:'待機中',processing:'読み取り中...',confirming:'確認待ち',done:'✅ 登録済み',error:'❌ エラー'};
   q.innerHTML=pdfQueue.map(p=>{
-    const label=p.statusLabel||sl[p.status]||sl['waiting'];
+    const label = p.statusLabel || sl[p.status] || sl['waiting'];
     return `<div class="pdf-item"><span>📄</span><span class="pdf-name">${p.name}</span><span class="pdf-status ${p.status}">${label}</span>${p.status==='waiting'?`<button class="pdf-remove" onclick="removeFromQueue('${p.name.replace(/'/g,"\\'")}')">✕</button>`:''}</div>`;
   }).join('');
 }
@@ -430,35 +411,36 @@ async function startImport(){
     try{
       const base64=await fileToBase64(item.file);
       const extracted=await extractFromPdf(base64,apiKey,item.name);
-      if(extracted&&extracted.length>0){
+      if(extracted && extracted.length>0){
         extracted.forEach((rec,idx)=>{
-          pendingConfirm.push({...rec,_filename:extracted.length>1?`${item.name}（${idx+1}件目）`:item.name});
+          pendingConfirm.push({
+            ...rec,
+            _filename: extracted.length>1 ? `${item.name}（${idx+1}件目）` : item.name
+          });
         });
         const p=pdfQueue.find(p=>p.name===item.name);
-        if(p)p.statusLabel=extracted.length>1?`確認待ち（${extracted.length}件）`:'確認待ち';
+        if(p) p.statusLabel = extracted.length>1 ? `確認待ち（${extracted.length}件）` : '確認待ち';
         updatePdfStatus(item.name,'confirming');
-      }else{
+      } else {
         updatePdfStatus(item.name,'error');
       }
     }catch(e){
-      const errMsg=e.message.slice(0,60);
+      const errMsg = e.message.includes('fetch')
+        ? 'ネットワークエラー。Braveシールドをオフにして再試行してください'
+        : e.message.slice(0,50);
       updatePdfStatus(item.name,'error');
       const p=pdfQueue.find(p=>p.name===item.name);
-      if(p)p.statusLabel=`❌ ${errMsg}`;
+      if(p) p.statusLabel=`❌ ${errMsg}`;
       renderQueue();
     }
     done++;
   }
   document.getElementById('progress-fill').style.width='100%';
   document.getElementById('progress-wrap').style.display='none';
-  if(pendingConfirm.length>0){
-    renderConfirm();
-    showScreen('confirm');
+  if(pendingConfirm.length>0){renderConfirm();showScreen('confirm');
     document.querySelector('#screen-confirm .sub').textContent=`${pendingConfirm.length}件を抽出しました。内容を確認・修正してから登録してください`;
-  }else{
-    document.getElementById('import-msg').innerHTML='<div class="msg msg-error">❌ 読み取れませんでした</div>';
-    document.getElementById('import-btn').disabled=false;
   }
+  else{document.getElementById('import-msg').innerHTML='<div class="msg msg-error">❌ 読み取れませんでした</div>';document.getElementById('import-btn').disabled=false}
 }
 
 async function extractFromPdf(base64,apiKey,filename){
@@ -508,12 +490,12 @@ async function extractFromPdf(base64,apiKey,filename){
   if(data.error)throw new Error(`(${data.error.type}) ${data.error.message}`);
   const text=(data.content||[]).map(c=>c.text||'').join('').replace(/```json|```/g,'').trim();
   let parsed;
-  try{parsed=JSON.parse(text);}
-  catch(e){throw new Error('JSON解析失敗: '+text.slice(0,50));}
-  return Array.isArray(parsed)?parsed:[parsed];
+  try{ parsed=JSON.parse(text); }
+  catch(e){ throw new Error('JSON解析失敗: '+text.slice(0,50)); }
+  return Array.isArray(parsed) ? parsed : [parsed];
 }
 
-// ── Confirm ───────────────────────────────────────
+// ── Confirm ────────────────────────────────────────
 const FIELD_LABELS={date:'発生日時',facility:'施設名',jurisdiction:'管轄',equipment:'機器名称',reporter:'報告者',symptom:'異常・故障',location:'発生場所',discovery:'発見方法',situation:'状況',cause:'推定原因',action:'措置対策',note:'備考'};
 const FIELD_KEYS=Object.keys(FIELD_LABELS);
 const MULTILINE=['situation','cause','action','note'];
@@ -528,8 +510,8 @@ function renderConfirm(){
         <span class="confirm-filename">${item._filename}</span>
       </div>
       ${FIELD_KEYS.map(key=>{
-        if(key==='jurisdiction')return `<div class="field-row"><div class="field-row-label">${FIELD_LABELS[key]}</div><select class="edit-select" onchange="updatePending(${i},'${key}',this.value)">${JURISDICTIONS.map(j=>`<option value="${j}" ${(item[key]||'不明')===j?'selected':''}>${j}管轄</option>`).join('')}</select></div>`;
-        if(MULTILINE.includes(key))return `<div class="field-row"><div class="field-row-label">${FIELD_LABELS[key]}</div><textarea rows="3" oninput="updatePending(${i},'${key}',this.value)">${item[key]||''}</textarea></div>`;
+        if(key==='jurisdiction') return `<div class="field-row"><div class="field-row-label">${FIELD_LABELS[key]}</div><select class="edit-select" onchange="updatePending(${i},'${key}',this.value)">${JURISDICTIONS.map(j=>`<option value="${j}" ${(item[key]||'不明')===j?'selected':''}>${j}管轄</option>`).join('')}</select></div>`;
+        if(MULTILINE.includes(key)) return `<div class="field-row"><div class="field-row-label">${FIELD_LABELS[key]}</div><textarea rows="3" oninput="updatePending(${i},'${key}',this.value)">${item[key]||''}</textarea></div>`;
         return `<div class="field-row"><div class="field-row-label">${FIELD_LABELS[key]}</div><input class="edit-input" type="text" value="${(item[key]||'').replace(/"/g,'&quot;')}" oninput="updatePending(${i},'${key}',this.value)"></div>`;
       }).join('')}
     </div>`).join('');
@@ -544,150 +526,154 @@ function saveConfirmed(){
   setTimeout(()=>{document.getElementById('confirm-msg').innerHTML='';pendingConfirm=[];showScreen('home')},2000);
 }
 
-// ── Sample ────────────────────────────────────────
+// ── Sample ─────────────────────────────────────────
 const SAMPLE=[
   {id:1,date:'令和8年3月21日 0時40分',facility:'三高浄化センター',jurisdiction:'三高',equipment:'受槽ブロワ',reporter:'石田',symptom:'過電流によるサーマルリレー作動',cause:'ベアリング経年劣化による負荷増大',action:'バルブ操作でバイパス運用。3/24更新工事完了。',situation:'起動直後に電流値が異常上昇し再トリップ。以前より異音あり。',location:'三高浄化センター',discovery:'通報',note:''},
   {id:2,date:'2024/6/15',facility:'三高浄化センター',jurisdiction:'三高',equipment:'汚泥ポンプ',reporter:'',symptom:'最終沈殿池の上澄みが濁っている',cause:'汚泥の膨化（バルキング）・糸状菌の増殖',action:'汚泥引き抜き量増加。DO管理強化。塩素注入。',situation:'',location:'',discovery:'',note:'3日後に回復。夏場に多い。'},
-  {id:3,date:'2024/1/22',facility:'三高浄化センター',jurisdiction:'三高',equipment:'散気管・送風機',reporter:'',symptom:'曝気槽のDO値が急激に低下',cause:'散気管の目詰まりによる酸素供給不足',action:'散気管洗浄。送風量を一時増加。',situation:'DO値が0.5mg/L以下に低下。活性汚泥の状態悪化。',location:'曝気槽',discovery:'水質計測',note:''},
-  {id:4,date:'2024/4/10',facility:'沖浄化センター',jurisdiction:'沖',equipment:'スクリーン',reporter:'',symptom:'流入スクリーンが目詰まりで水位上昇',cause:'大雨による夾雑物の大量流入',action:'手動除渣。スクリーン清掃実施。',situation:'流入水位が警報レベルに達した。',location:'流入ポンプ棟',discovery:'警報',note:''},
-  {id:5,date:'2024/2/8',facility:'中田浄化センター',jurisdiction:'中田',equipment:'汚泥脱水機',reporter:'',symptom:'脱水ケーキの含水率が高い',cause:'凝集剤添加量の不足・ベルトの劣化',action:'凝集剤添加量を調整。ベルト交換を手配。',situation:'含水率が85%を超え搬出困難。',location:'汚泥棟',discovery:'目視',note:''},
+  {id:3,date:'2024/1/22',facility:'三高浄化センター',jurisdiction:'三高',equipment:'散気管・送風機',reporter:'',symptom:'曝気槽のDO値が急激に低下',cause:'散気管の目詰まり。送風機フィルター汚れ。',action:'送風機フィルター清掃。散気管洗浄を計画。',situation:'',location:'',discovery:'',note:'DO計の校正も実施。'},
+  {id:4,date:'2023/11/8',facility:'沖浄化センター',jurisdiction:'沖',equipment:'流量計',reporter:'',symptom:'流量計の値が異常に高い数値を示している',cause:'流量計内部への異物混入と電極の汚れ。',action:'流量計洗浄・電極交換。',situation:'',location:'',discovery:'',note:'半年に1回の定期清掃を推奨。'},
+  {id:5,date:'2023/8/30',facility:'中田浄化センター',jurisdiction:'中田',equipment:'塩素注入ポンプ',reporter:'',symptom:'消毒後の大腸菌数が基準値超え',cause:'塩素注入ポンプの流量設定ミス。',action:'注入ポンプのキャリブレーション実施。注入量を修正。',situation:'',location:'',discovery:'',note:'月1回のキャリブレーション確認を徹底。'},
+  {id:6,date:'2022/5/10',facility:'4号中小路ポンプ場',jurisdiction:'三高',equipment:'№2ポンプ',reporter:'上林',symptom:'過負荷異常。電流値通常3Aのところ7Aで運転。',cause:'布がポンプの羽根に絡まり過負荷。',action:'ポンプ吊り上げ・布除去。',situation:'OCランプ点灯。モーターリレーにOC（過負荷）のランプ点灯。',location:'4号中小路ポンプ場',discovery:'警報通知',note:'最近布等の流入でポンプの過負荷異常が多い。対策が必要。'}
 ];
 function loadSample(){
-  if(!confirm('サンプルデータ5件を登録しますか？'))return;
-  const existing=getRecords();
-  const merged=[...existing,...SAMPLE.map((r,i)=>({...r,id:existing.length+i+1}))];
-  saveRecords(merged);
-  document.getElementById('import-msg').innerHTML='<div class="msg">✅ サンプル5件を登録しました</div>';
-  setTimeout(()=>{document.getElementById('import-msg').innerHTML='';showScreen('home')},1500);
+  saveRecords(SAMPLE);
+  document.getElementById('import-msg').innerHTML='<div class="msg">✅ サンプルデータ（6件）を読み込みました！</div>';
+  setTimeout(()=>{document.getElementById('import-msg').innerHTML='';showScreen('home')},1800);
 }
 
-// ── Search History ────────────────────────────────
-function getSearchHist(){try{return JSON.parse(localStorage.getItem(SEARCH_HIST_KEY)||'[]')}catch{return[]}}
-function saveSearchHist(entry){
-  const hist=getSearchHist();
-  hist.unshift(entry);
-  localStorage.setItem(SEARCH_HIST_KEY,JSON.stringify(hist.slice(0,5)));
-}
-function renderSearchHist(){
-  const hist=getSearchHist();
-  const el=document.getElementById('search-hist-list');
-  if(hist.length===0){
-    el.innerHTML='<div class="empty-wrap"><div class="empty-icon">🕐</div><div>まだ検索履歴がありません</div></div>';
-    return;
-  }
-  el.innerHTML=hist.map((h,i)=>`
-    <div class="search-hist-item" onclick="showSavedResult(${i})">
-      <div class="search-hist-query">🔍 ${h.query}</div>
-      <div class="search-hist-meta">${h.date}　${h.filter!=='全て'?'【'+h.filter+'】':''}</div>
-      ${h.advice?`<div class="search-hist-advice">💡 ${h.advice}</div>`:''}
-      <div class="search-hist-results">
-        ${(h.results||[]).map((r,rank)=>`
-          <div class="search-hist-result-row">
-            <span class="shi-rank">${rank+1}位</span>
-            <div class="shi-body">
-              <div class="shi-symptom">${r.symptom||'−'}</div>
-              <div class="shi-cause">${r.cause||''}</div>
-              <div class="shi-action">${r.action||''}</div>
-            </div>
-          </div>`).join('')}
-      </div>
-    </div>`).join('');
-}
-function showSavedResult(i){
-  const h=getSearchHist()[i];
-  if(!h)return;
-  showScreen('result');
-  document.getElementById('query-display').textContent='「'+h.query+'」の検索結果（'+h.date+'）';
-  document.getElementById('stage-indicator-wrap').innerHTML='';
-  let html='';
-  if(h.advice)html+=`<div class="advice-card"><div class="advice-label">💡 AIアドバイス</div><div class="advice-text">${h.advice}</div></div>`;
-  (h.results||[]).forEach((r,rank)=>{
-    const jc=r.jurisdiction||'不明';
-    html+=`<div class="result-card">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <span class="rank-badge">${rank+1}位</span>
-        <span class="match-text">${r.reason||''}</span>
-        <span class="jurisdiction-badge j-${jc}">${jc}</span>
-        <span class="date-text">${r.date||''}</span>
-      </div>
-      <div class="field"><div class="field-label">異常・故障</div><div class="symptom-text">${r.symptom||'−'}</div></div>
-      <div class="field"><div class="field-label">推定原因</div><div class="cause-text">${r.cause||'−'}</div></div>
-      <div class="field"><div class="field-label">措置対策</div><div class="action-text">${r.action||'−'}</div></div>
-      ${r.note?`<div class="field"><div class="field-label">備考</div><div class="note-text">${r.note}</div></div>`:''}
-    </div>`;
+// ══════════════════════════════════════════════════
+// ★★★ 2段階検索ロジック ★★★
+// ══════════════════════════════════════════════════
+
+// ── Stage1: キーワード絞り込み（無料・高速）────────
+function keywordFilter(records, query, maxResults=60) {
+  // クエリをスペース・読点で分割してキーワード配列に
+  const keywords = query
+    .replace(/[、。　・,，.]/g, ' ')
+    .split(/\s+/)
+    .filter(k => k.length >= 1)
+    .map(k => k.toLowerCase());
+
+  if(keywords.length === 0) return records.slice(0, maxResults);
+
+  // 各レコードのスコアを計算
+  const scored = records.map(r => {
+    const text = [
+      r.symptom, r.cause, r.action, r.situation,
+      r.equipment, r.note, r.facility, r.location
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    let score = 0;
+    for(const kw of keywords) {
+      if(text.includes(kw)) {
+        // 症状・機器名のヒットは高スコア
+        const symptomText = (r.symptom||'').toLowerCase();
+        const equipText   = (r.equipment||'').toLowerCase();
+        if(symptomText.includes(kw)) score += 5;
+        else if(equipText.includes(kw)) score += 3;
+        else score += 1;
+      }
+    }
+    return { record: r, score };
   });
-  document.getElementById('result-content').innerHTML=html||'<div class="empty-wrap"><div>結果なし</div></div>';
+
+  // スコア順にソートして上位maxResultsを返す
+  return scored
+    .filter(s => s.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, maxResults)
+    .map(s => s.record);
 }
 
-// ── Search ────────────────────────────────────────
-const TAGS=['ブロワトリップ','DO低下','汚泥膨化','ポンプ故障','水質悪化','スクリーン詰まり','異臭','漏水'];
+// ── Search タグ・ボタン ────────────────────────────
+const TAGS=['ブロワトリップ','ポンプ異常','DO低下','水が濁る','流量計異常','電流上昇','悪臭発生','サーマルリレー'];
+document.getElementById('tag-list').innerHTML=TAGS.map(t=>`<button class="tag" onclick="setQuery('${t}')">${t}</button>`).join('');
+function setQuery(t){document.getElementById('query-input').value=t;updateSearchBtn()}
+document.getElementById('query-input').addEventListener('input',updateSearchBtn);
+function updateSearchBtn(){document.getElementById('search-btn').disabled=!document.getElementById('query-input').value.trim()}
 
-function renderTags(){
-  document.getElementById('tag-list').innerHTML=TAGS.map(t=>`<button class="tag" onclick="appendTag('${t}')">${t}</button>`).join('');
-}
-function appendTag(t){
-  const ta=document.getElementById('query-input');
-  ta.value=(ta.value?ta.value+' ':'')+t;
-  document.getElementById('search-btn').disabled=ta.value.trim()==='';
-}
-
+// ── メイン検索処理 ────────────────────────────────
 async function handleSearch(){
   const query=document.getElementById('query-input').value.trim();
-  if(!query)return;
-  const apiKey=getApiKey();
-  if(!apiKey){alert('APIキーが未設定です');showScreen('settings');return}
+  let records=getRecords();
+
+  // 管轄フィルター
+  if(activeSearchFilter!=='全て') records=records.filter(r=>(r.jurisdiction||'不明')===activeSearchFilter);
 
   showScreen('result');
-  document.getElementById('query-display').textContent='「'+query+'」の検索結果';
-  document.getElementById('result-content').innerHTML=`
-    <div class="loading-wrap">
-      <div class="spinner"></div>
-      <div>AIが分析中...</div>
-      <div class="loading-step" id="loading-step">① キーワードで絞り込み中...</div>
+  document.getElementById('query-display').textContent='「'+query+'」'+(activeSearchFilter!=='全て'?' ／ '+activeSearchFilter+'管轄':'');
+  const content=document.getElementById('result-content');
+  const indicator=document.getElementById('stage-indicator-wrap');
+
+  if(records.length===0){
+    indicator.innerHTML='';
+    content.innerHTML='<div class="error-card">該当する事例データがありません。</div>';
+    return;
+  }
+
+  const apiKey=getApiKey();
+  if(!apiKey){
+    indicator.innerHTML='';
+    content.innerHTML='<div class="error-card">APIキーが設定されていません。⚙️設定から登録してください。</div>';
+    return;
+  }
+
+  // ── Stage1インジケーター表示 ───────────────────
+  indicator.innerHTML=`
+    <div class="stage-indicator">
+      <div class="stage-dot active" id="dot1"></div>
+      <div class="stage-label active" id="lbl1">① キーワード絞り込み</div>
+      <div class="stage-line"></div>
+      <div class="stage-dot" id="dot2"></div>
+      <div class="stage-label" id="lbl2">② AI類似検索</div>
     </div>`;
 
-  // 2段階検索インジケーター
-  document.getElementById('stage-indicator-wrap').innerHTML=`
-    <div class="stage-indicator">
-      <span class="stage-dot active" id="dot1"></span>
-      <span class="stage-label active" id="label1">① キーワード絞込</span>
-      <span class="stage-line"></span>
-      <span class="stage-dot" id="dot2"></span>
-      <span class="stage-label" id="label2">② AI分析</span>
-    </div>`;
+  content.innerHTML='<div class="loading-wrap"><div class="spinner"></div><div>キーワードで絞り込み中...</div></div>';
+
+  // ── Stage1: キーワード絞り込み ─────────────────
+  await new Promise(r=>setTimeout(r,300)); // UI更新のため少し待つ
+  const filtered = keywordFilter(records, query, 60);
+  const totalCount = records.length;
+  const filteredCount = filtered.length;
+
+  // Stage1完了 → Stage2へ
+  document.getElementById('dot1').className='stage-dot done';
+  document.getElementById('lbl1').className='stage-label done';
+  document.getElementById('dot2').className='stage-dot active';
+  document.getElementById('lbl2').className='stage-label active';
+
+  content.innerHTML=`
+    <div class="filter-result-badge">
+      ✅ ${totalCount}件 → <strong style="color:#22d3ee;margin:0 4px">${filteredCount}件</strong>に絞り込み
+    </div>
+    <div class="loading-wrap"><div class="spinner"></div><div>AIが類似事例を分析中...</div><div class="loading-step">しばらくお待ちください</div></div>`;
+
+  // データが0件の場合
+  if(filteredCount===0){
+    document.getElementById('dot2').className='stage-dot done';
+    document.getElementById('lbl2').className='stage-label done';
+    content.innerHTML=`
+      <div class="filter-result-badge">検索結果：0件</div>
+      <div class="error-card">キーワードに一致する事例が見つかりませんでした。<br>別のキーワードで試してください。</div>`;
+    return;
+  }
+
+  // ── Stage2: AI検索 ────────────────────────────
+  const recordsText=filtered.map((r,i)=>
+    `【事例${i+1}】日時:${r.date||'不明'} / 施設:${r.facility||''} / 管轄:${r.jurisdiction||'不明'} / 機器:${r.equipment||''} / 症状:${r.symptom||''} / 状況:${r.situation||''} / 原因:${r.cause||''} / 対処:${r.action||''}`
+  ).join('\n');
+
+  const prompt=`あなたは浄化センターのトラブル対応支援AIです。
+以下は「${query}」に関連する過去のトラブル事例（キーワード絞り込み済み${filteredCount}件）です：
+${recordsText}
+---
+現在発生しているトラブル：「${query}」
+
+上記から最も類似する事例を最大3件抽出してください。
+以下のJSON形式のみで返してください（前置き・説明文・マークダウン記号は不要）：
+{"similar":[{"rank":1,"match":"類似理由20字以内","date":"日時","facility":"施設名","jurisdiction":"管轄","equipment":"機器名","symptom":"症状","cause":"原因","action":"対処法","note":"所見"}],"advice":"現在のトラブルへの対応アドバイスを120字程度で"}`;
 
   try{
-    // Stage 1: キーワード絞り込み
-    let records=getRecords();
-    if(activeSearchFilter!=='全て')records=records.filter(r=>r.jurisdiction===activeSearchFilter);
-
-    const keywords=query.replace(/[、。，．]/g,' ').split(/\s+/).filter(k=>k.length>0);
-    let filtered=records.filter(r=>{
-      const text=[r.symptom,r.cause,r.action,r.situation,r.equipment,r.note].join(' ');
-      return keywords.some(k=>text.includes(k));
-    });
-    if(filtered.length===0)filtered=records;
-    const candidates=filtered.slice(0,50);
-
-    // Stage 2: AI分析
-    document.getElementById('dot1').className='stage-dot done';
-    document.getElementById('label1').className='stage-label done';
-    document.getElementById('dot2').className='stage-dot active';
-    document.getElementById('label2').className='stage-label active';
-    document.getElementById('loading-step').textContent='② AIが類似度を分析中...';
-
-    const casesText=candidates.map((r,i)=>`[${i+1}] 症状:${r.symptom} 原因:${r.cause} 措置:${r.action} 機器:${r.equipment} 管轄:${r.jurisdiction}`).join('\n');
-    const aiPrompt=`浄化センターのトラブル対応AIです。
-以下の過去事例の中から、ユーザーの症状に類似する事例を類似度の高い順に5件選んでください（事例が5件未満の場合はある分だけ返してください）。
-
-ユーザーの症状：${query}
-
-過去事例リスト：
-${casesText}
-
-以下のJSON形式のみで返してください（前置き不要）：
-{"advice":"対応アドバイス（2〜3文）","results":[{"index":1,"similarity":"高/中/低","reason":"類似理由（20字以内）"}]}`;
-
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{
@@ -696,98 +682,145 @@ ${casesText}
         'anthropic-version':'2023-06-01',
         'anthropic-dangerous-direct-browser-access':'true'
       },
-      body:JSON.stringify({
-        model:'claude-haiku-4-5-20251001',
-        max_tokens:1000,
-        messages:[{role:'user',content:aiPrompt}]
-      })
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})
     });
     const data=await res.json();
-    if(data.error)throw new Error(`(${data.error.type}) ${data.error.message}`);
+    if(data.error)throw new Error(data.error.message);
+    const text=(data.content||[]).map(c=>c.text||'').join('');
+    const parsed=JSON.parse(text.replace(/```json|```/g,'').trim());
 
-    const text=(data.content||[]).map(c=>c.text||'').join('').replace(/```json|```/g,'').trim();
-    let parsed;
-    try{parsed=JSON.parse(text);}
-    catch(e){throw new Error('AI応答の解析失敗');}
-
+    // Stage2完了
     document.getElementById('dot2').className='stage-dot done';
-    document.getElementById('label2').className='stage-label done';
+    document.getElementById('lbl2').className='stage-label done';
 
-    // 検索履歴に保存
-    const histEntry={
-      query,
-      filter:activeSearchFilter,
-      date:new Date().toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}),
-      advice:parsed.advice||'',
-      results:(parsed.results||[]).map(r=>{
-        const rec=candidates[r.index-1];
-        if(!rec)return null;
-        return {symptom:rec.symptom,cause:rec.cause,action:rec.action,note:rec.note,jurisdiction:rec.jurisdiction,date:rec.date,reason:r.reason};
-      }).filter(Boolean)
-    };
-    saveSearchHist(histEntry);
-
-    let html='';
-    if(parsed.advice){
-      html+=`<div class="advice-card"><div class="advice-label">💡 AIアドバイス</div><div class="advice-text">${parsed.advice}</div></div>`;
-    }
-    html+=`<div class="filter-result-badge">✓ ${candidates.length}件から絞り込み</div>`;
-
-    if(parsed.results&&parsed.results.length>0){
-      parsed.results.forEach((r,rank)=>{
-        const idx=r.index-1;
-        const rec=candidates[idx];
-        if(!rec)return;
-        const jc=rec.jurisdiction||'不明';
-        html+=`<div class="result-card">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-            <span class="rank-badge">${rank+1}位</span>
-            <span class="match-text">${r.reason||''}</span>
-            <span class="jurisdiction-badge j-${jc}">${jc}</span>
-            <span class="date-text">${rec.date||''}</span>
-          </div>
-          <div class="field"><div class="field-label">異常・故障</div><div class="symptom-text">${rec.symptom||'−'}</div></div>
-          <div class="field"><div class="field-label">推定原因</div><div class="cause-text">${rec.cause||'−'}</div></div>
-          <div class="field"><div class="field-label">措置対策</div><div class="action-text">${rec.action||'−'}</div></div>
-          ${rec.note?`<div class="field"><div class="field-label">備考</div><div class="note-text">${rec.note}</div></div>`:''}
-        </div>`;
-      });
-    }else{
-      html+='<div class="empty-wrap"><div class="empty-icon">🔍</div><div>類似事例が見つかりませんでした</div></div>';
-    }
-    document.getElementById('result-content').innerHTML=html;
-
+    renderResult(parsed, totalCount, filteredCount);
   }catch(e){
-    document.getElementById('result-content').innerHTML=`<div class="error-card">❌ エラーが発生しました<br><br><strong>種別：</strong>${e.name}<br><strong>内容：</strong>${e.message}</div>`;
+    content.innerHTML=`<div class="error-card">エラーが発生しました。<br><small>${e.message}</small></div>`;
   }
 }
 
-// ── History ───────────────────────────────────────
+function renderResult(data, totalCount, filteredCount){
+  const content=document.getElementById('result-content');
+  let html=`<div class="filter-result-badge">✅ ${totalCount}件 → <strong style="color:#22d3ee;margin:0 4px">${filteredCount}件</strong>に絞り込んでAI分析</div>`;
+  html+=`<div class="advice-card"><div class="advice-label">💡 AI アドバイス</div><div class="advice-text">${data.advice||''}</div></div>`;
+  html+=`<div class="section-label">類似事例</div>`;
+  (data.similar||[]).forEach(item=>{
+    const j=item.jurisdiction||'不明';
+    html+=`<div class="result-card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span class="rank-badge">#${item.rank}</span>
+        <span class="match-text">${item.match||''}</span>
+        <span class="jurisdiction-badge j-${j}">${j}</span>
+        <span class="date-text">${item.date||''}</span>
+      </div>
+      <div style="font-size:12px;color:#64748b;margin-bottom:8px">${item.facility||''} ${item.equipment?'／ 🔧 '+item.equipment:''}</div>
+      <div class="field"><div class="field-label">症状</div><div class="symptom-text">${item.symptom||'-'}</div></div>
+      <div class="field"><div class="field-label">原因</div><div class="cause-text">${item.cause||'-'}</div></div>
+      <div class="field"><div class="field-label">対処法</div><div class="action-text">${item.action||'-'}</div></div>
+      ${item.note?`<div class="field"><div class="field-label">所見</div><div class="note-text">${item.note}</div></div>`:''}
+    </div>`;
+  });
+  content.innerHTML=html;
+}
+
+// ── History ────────────────────────────────────────
 function renderHistory(){
   let records=getRecords();
-  if(activeHistoryFilter!=='全て')records=records.filter(r=>r.jurisdiction===activeHistoryFilter);
-  document.getElementById('history-count').textContent=`${records.length}件`;
+  if(activeHistoryFilter!=='全て') records=records.filter(r=>(r.jurisdiction||'不明')===activeHistoryFilter);
+  const totalCount=records.length;
+  // 最新50件に絞る（登録順で後ろから）
+  const display=records.slice(-50).reverse();
+  document.getElementById('history-count').textContent=
+    totalCount>50 ? `最新50件を表示（全${totalCount}件）` : `${totalCount}件`;
+  const list=document.getElementById('history-list');
   if(records.length===0){
-    document.getElementById('history-list').innerHTML=`<div class="empty-wrap"><div class="empty-icon">📋</div><div>登録済み事例がありません</div><button class="import-link" onclick="showScreen('import')">PDFを取り込む</button></div>`;
+    list.innerHTML=`<div class="empty-wrap"><div class="empty-icon">📭</div><div>データがありません</div><button class="import-link" onclick="showScreen('import')">PDFを取り込む</button></div>`;
     return;
   }
-  document.getElementById('history-list').innerHTML=[...records].reverse().map(r=>{
-    const jc=r.jurisdiction||'不明';
+  list.innerHTML=display.map((r,i)=>{
+    const j=r.jurisdiction||'不明';
     return `<div class="history-item">
-      <div class="history-date"><span class="jurisdiction-badge j-${jc}">${jc}</span>${r.date||'日時不明'}</div>
-      <div class="history-symptom">${r.symptom||'症状不明'}</div>
-      <div class="history-cause">${r.equipment?'【'+r.equipment+'】':''} ${r.cause||''}</div>
-      ${r.action?`<div style="font-size:12px;color:#86efac;margin-top:4px">${r.action}</div>`:''}
+      <div class="history-date"><span>${r.date||'日時不明'}</span><span class="jurisdiction-badge j-${j}">${j}</span></div>
+      <div class="history-symptom">${r.facility||''} ${r.equipment?'／ '+r.equipment:''}</div>
+      <div class="history-cause">${r.symptom||''}</div>
     </div>`;
   }).join('');
 }
 
-// ── Init ──────────────────────────────────────────
-document.getElementById('query-input').addEventListener('input',function(){
-  document.getElementById('search-btn').disabled=this.value.trim()==='';
-});
-renderTags();
+// ── バックアップ・復元 ─────────────────────────────
+function backupData(){
+  const records=getRecords();
+  if(records.length===0){
+    document.getElementById('backup-msg').innerHTML='<div class="msg msg-error">❌ データがありません</div>';
+    setTimeout(()=>document.getElementById('backup-msg').innerHTML='',2000);
+    return;
+  }
+  const backup={
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    count: records.length,
+    records: records
+  };
+  const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const now=new Date();
+  const dateStr=`${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+  a.href=url;
+  a.download=`トラブル事例バックアップ_${dateStr}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  document.getElementById('backup-msg').innerHTML=`<div class="msg">✅ ${records.length}件をバックアップしました</div>`;
+  setTimeout(()=>document.getElementById('backup-msg').innerHTML='',2500);
+}
+
+function restoreData(e){
+  const file=e.target.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const backup=JSON.parse(ev.target.result);
+      // バージョンチェック
+      if(!backup.records||!Array.isArray(backup.records)){
+        throw new Error('無効なバックアップファイルです');
+      }
+      const existing=getRecords();
+      if(existing.length>0){
+        const ans=confirm(`現在${existing.length}件のデータがあります。\n\nバックアップ（${backup.records.length}件）を追加しますか？\n\n「OK」→追加　「キャンセル」→上書き`);
+        if(ans){
+          // 追加
+          const merged=[...existing,...backup.records.map((r,i)=>({...r,id:existing.length+i+1}))];
+          saveRecords(merged);
+          document.getElementById('backup-msg').innerHTML=`<div class="msg">✅ ${backup.records.length}件を追加しました（合計${merged.length}件）</div>`;
+        }else{
+          // 上書き
+          saveRecords(backup.records);
+          document.getElementById('backup-msg').innerHTML=`<div class="msg">✅ ${backup.records.length}件を復元しました</div>`;
+        }
+      }else{
+        saveRecords(backup.records);
+        document.getElementById('backup-msg').innerHTML=`<div class="msg">✅ ${backup.records.length}件を復元しました</div>`;
+      }
+      setTimeout(()=>{document.getElementById('backup-msg').innerHTML='';showScreen('home')},2000);
+    }catch(err){
+      document.getElementById('backup-msg').innerHTML=`<div class="msg msg-error">❌ 読み込み失敗：${err.message}</div>`;
+    }
+  };
+  reader.readAsText(file,'UTF-8');
+  e.target.value='';
+}
+function clearAllData(){
+  if(!confirm('本当にすべてのデータを削除しますか？'))return;
+  localStorage.removeItem(STORAGE_KEY);
+  updateCount();
+  alert('削除しました。');
+  showScreen('home');
+}
+
 updateCount();
 </script>
+</body>
+</html>
 </body>
 </html>
