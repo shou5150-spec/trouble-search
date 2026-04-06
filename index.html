@@ -878,17 +878,20 @@ function renderHistory(){
     list.innerHTML=`<div class="empty-wrap"><div class="empty-icon">🔍</div><div style="font-size:13px">検索履歴がありません</div><div style="font-size:11px;color:#475569;margin-top:8px">検索するたびに自動で保存されます</div></div>`;
     return;
   }
-  list.innerHTML=history.map((h,i)=>`
-    <div class="history-item" onclick="showHistoryDetail(${i})" style="cursor:pointer;active:opacity:0.7">
+  list.innerHTML=history.map((h,i)=>{
+    const similarCount=(h.similar||[]).length;
+    const filterBadge=h.filter&&h.filter!=='全て'?`<span class="jurisdiction-badge j-${h.filter}">${h.filter}</span>`:'';
+    return `<div class="history-item" onclick="showHistoryDetail(${i})" style="cursor:pointer">
       <div class="history-date">
-        <span style="font-size:10px;color:#475569">${h.savedAt}</span>
-        ${h.filter!=='全て'?`<span class="jurisdiction-badge j-${h.filter}">${h.filter}</span>`:''}
+        <span style="font-size:10px;color:#475569">${h.savedAt||''}</span>
+        ${filterBadge}
       </div>
-      <div class="history-symptom">🔍 ${h.query}</div>
+      <div class="history-symptom">🔍 ${h.query||''}</div>
       <div class="history-cause" style="color:#64748b;font-size:11px">
-        ${h.similar.length}件の類似事例 ／ タップで詳細を見る
+        ${similarCount}件の類似事例 ／ タップで詳細を見る
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function showHistoryDetail(idx){
