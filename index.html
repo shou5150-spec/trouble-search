@@ -11,6 +11,7 @@
 <link rel="manifest" id="manifest-link">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
 body{background:#0f172a;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Noto Sans JP',sans-serif;min-height:100vh;max-width:480px;margin:0 auto}
 .screen{display:none;flex-direction:column;min-height:100vh;padding:env(safe-area-inset-top,24px) 20px env(safe-area-inset-bottom,24px)}
 .screen.active{display:flex}
@@ -125,18 +126,44 @@ select.edit-select{width:100%;background:#0f172a;border:1px solid #334155;border
   <div class="home-header">
     <button class="settings-btn" onclick="showScreen('settings')">⚙️</button>
     <div class="badge">FACILITY AI</div>
-    <h1>トラブル<br>類似事例検索</h1>
-    <p class="sub">2段階検索で1600件も高速・低コストに対応</p>
+    <h1 style="font-family:'Share Tech Mono',monospace;font-size:30px;letter-spacing:2px">Trouble-Search</h1>
+    <!-- 類似事例検索 + APIキー状態を同行右寄せ -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <p class="sub" style="margin-bottom:0">類似事例検索</p>
+      <div id="home-api-status" style="font-size:12px;color:#fde047"></div>
+    </div>
   </div>
   <div class="stat-card">
-    <div class="stat-label">登録済み事例</div>
+    <div class="stat-label">登録済み事例（全体）</div>
     <div><span class="stat-num" id="record-count">0</span><span class="stat-unit">件</span></div>
   </div>
-  <div id="home-api-status" style="font-size:12px;text-align:center;margin-bottom:12px;padding:8px;border-radius:10px"></div>
-  <div id="home-api-status" style="font-size:12px;text-align:center;margin-bottom:12px;padding:8px;border-radius:10px"></div>
+  <!-- 施設別件数 -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+    <div style="background:#1e293b;border-radius:12px;padding:10px;border:1px solid rgba(34,211,238,0.3)">
+      <div style="font-size:10px;color:#22d3ee;margin-bottom:4px">三高管轄</div>
+      <div style="font-size:22px;font-weight:900;color:#22d3ee" id="count-三高">0</div>
+      <div style="font-size:10px;color:#475569">件</div>
+    </div>
+    <div style="background:#1e293b;border-radius:12px;padding:10px;border:1px solid rgba(0,255,157,0.3)">
+      <div style="font-size:10px;color:#00ff9d;margin-bottom:4px">沖管轄</div>
+      <div style="font-size:22px;font-weight:900;color:#00ff9d" id="count-沖">0</div>
+      <div style="font-size:10px;color:#475569">件</div>
+    </div>
+    <div style="background:#1e293b;border-radius:12px;padding:10px;border:1px solid rgba(253,224,71,0.3)">
+      <div style="font-size:10px;color:#fde047;margin-bottom:4px">中田管轄</div>
+      <div style="font-size:22px;font-weight:900;color:#fde047" id="count-中田">0</div>
+      <div style="font-size:10px;color:#475569">件</div>
+    </div>
+    <div style="background:#1e293b;border-radius:12px;padding:10px;border:1px solid rgba(249,168,212,0.3)">
+      <div style="font-size:10px;color:#f9a8d4;margin-bottom:4px">鹿川管轄</div>
+      <div style="font-size:22px;font-weight:900;color:#f9a8d4" id="count-鹿川">0</div>
+      <div style="font-size:10px;color:#475569">件</div>
+    </div>
+  </div>
+  <!-- ボタン：指定の順番 -->
   <button class="btn btn-primary" onclick="showScreen('search')">🔍　トラブルを検索する</button>
-  <button class="btn btn-secondary" onclick="showScreen('import')">📄　報告書PDFを取り込む</button>
   <button class="btn btn-secondary" onclick="showScreen('history')">📋　検索履歴（最新50件）</button>
+  <button class="btn btn-secondary" onclick="showScreen('records')">📁　登録済み事例一覧</button>
   <div style="text-align:center;color:#334155;font-size:11px;margin-top:auto;padding-top:20px">三高・沖・中田・鹿川 浄化センター対応</div>
 </div>
 
@@ -170,6 +197,16 @@ select.edit-select{width:100%;background:#0f172a;border:1px solid #334155;border
   <div class="card" style="border-color:rgba(239,68,68,0.3)">
     <div style="font-size:12px;color:#94a3b8;margin-bottom:12px">⚠️ 登録済みの事例データをすべて削除します</div>
     <button class="btn btn-danger" onclick="clearAllData()">データをすべて削除する</button>
+  </div>
+
+  <!-- 報告書取り込み -->
+  <div class="card" style="border-color:rgba(34,211,238,0.3)">
+    <div style="font-size:12px;color:#22d3ee;font-weight:700;margin-bottom:8px">📄 報告書PDFを取り込む</div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:12px;line-height:1.8">
+      PDFをAIで読み取りデータを登録します<br>
+      新旧フォーマット・複数ファイル対応
+    </div>
+    <button class="btn btn-secondary" style="border-color:rgba(34,211,238,0.4);color:#22d3ee" onclick="showScreen('import')">📄　報告書PDFを取り込む</button>
   </div>
 </div>
 
@@ -230,8 +267,11 @@ select.edit-select{width:100%;background:#0f172a;border:1px solid #334155;border
 <!-- SEARCH -->
 <div id="screen-search" class="screen">
   <button class="back-btn" onclick="showScreen('home')">← 戻る</button>
-  <h2>トラブル検索</h2>
-  <p class="sub">症状を入力してください</p>
+  <div style="margin-bottom:16px">
+    <div style="font-family:'Share Tech Mono',monospace;font-size:28px;font-weight:900;color:#22d3ee;letter-spacing:2px;line-height:1.1">Trouble-Search</div>
+    <div style="font-size:13px;color:#94a3b8;margin-top:2px">類似事例検索</div>
+  </div>
+  <p class="sub" style="margin-top:-8px">症状を入力してください</p>
 
   <!-- 管轄フィルター -->
   <div style="font-size:10px;color:#64748b;margin-bottom:6px">管轄で絞り込む（任意）</div>
@@ -245,15 +285,6 @@ select.edit-select{width:100%;background:#0f172a;border:1px solid #334155;border
 
   <textarea id="query-input" rows="4" placeholder="例：受槽ブロワがトリップした&#10;例：最終沈殿池の水が濁っている&#10;例：DO値が急に下がった"></textarea>
   <div class="tags" id="tag-list"></div>
-
-  <!-- 2段階検索の説明 -->
-  <div class="card" style="margin-bottom:16px;padding:12px">
-    <div style="font-size:11px;color:#64748b;margin-bottom:8px">🔍 2段階検索のしくみ</div>
-    <div style="font-size:12px;color:#94a3b8;line-height:1.8">
-      ① キーワード絞り込み（無料・高速）<br>
-      ② AIが類似事例を分析（精度◎）
-    </div>
-  </div>
 
   <button class="btn btn-primary" id="search-btn" onclick="handleSearch()" disabled>🔍　AIで類似事例を探す</button>
 </div>
@@ -285,9 +316,31 @@ select.edit-select{width:100%;background:#0f172a;border:1px solid #334155;border
   <div id="history-detail-content"></div>
 </div>
 
+<!-- RECORDS（登録済み事例一覧） -->
+<div id="screen-records" class="screen">
+  <button class="back-btn" onclick="showScreen('home')">← 戻る</button>
+  <h2>登録済み事例一覧</h2>
+  <div class="filter-wrap" id="records-filter">
+    <button class="filter-btn active" onclick="setRecordsFilter('全て',this)">全て</button>
+    <button class="filter-btn" onclick="setRecordsFilter('三高',this)">三高</button>
+    <button class="filter-btn" onclick="setRecordsFilter('沖',this)">沖</button>
+    <button class="filter-btn" onclick="setRecordsFilter('中田',this)">中田</button>
+    <button class="filter-btn" onclick="setRecordsFilter('鹿川',this)">鹿川</button>
+  </div>
+  <div id="records-count" class="sub"></div>
+  <div id="records-list"></div>
+</div>
+
+<!-- RECORD DETAIL（登録済み事例の詳細） -->
+<div id="screen-record-detail" class="screen">
+  <button class="back-btn" onclick="showScreen('records')">← 一覧に戻る</button>
+  <h2>事例詳細</h2>
+  <div id="record-detail-content"></div>
+</div>
+
 <script>
 // ── PWA ────────────────────────────────────────────
-const mf={name:"浄化センター トラブル検索",short_name:"トラブル検索",start_url:"./",display:"standalone",background_color:"#0f172a",theme_color:"#0f172a",icons:[{src:"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%230f172a'/><text y='130' x='96' font-size='110' text-anchor='middle'>🔧</text></svg>",sizes:"192x192",type:"image/svg+xml"}]};
+const mf={name:"Trouble-Search",short_name:"Trouble-Search",start_url:"./",display:"standalone",background_color:"#0f172a",theme_color:"#0f172a",icons:[{src:"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%230f172a'/><text y='130' x='96' font-size='110' text-anchor='middle'>🔧</text></svg>",sizes:"192x192",type:"image/svg+xml"}]};
 document.getElementById('manifest-link').href=URL.createObjectURL(new Blob([JSON.stringify(mf)],{type:'application/json'}));
 
 // ── Storage ────────────────────────────────────────
@@ -342,18 +395,21 @@ function saveApiKey(){
   setTimeout(()=>{document.getElementById('api-save-msg').innerHTML='';showScreen('home')},1500);
 }
 function updateCount(){
-  document.getElementById('record-count').textContent=getRecords().length;
-  // ホーム画面のAPIキー状態表示
+  const records=getRecords();
+  document.getElementById('record-count').textContent=records.length;
+  ['三高','沖','中田','鹿川'].forEach(j=>{
+    const el=document.getElementById('count-'+j);
+    if(el) el.textContent=records.filter(r=>(r.jurisdiction||'不明')===j).length;
+  });
+  // APIキー状態を類似事例検索行の右側に表示
   const apiStatus=document.getElementById('home-api-status');
   if(apiStatus){
     const k=getApiKey();
     if(k){
       apiStatus.textContent='✅ APIキー登録済み';
-      apiStatus.style.background='rgba(134,239,172,0.1)';
       apiStatus.style.color='#86efac';
     }else{
-      apiStatus.textContent='⚠️ APIキー未登録 → ⚙️設定から登録してください';
-      apiStatus.style.background='rgba(253,224,71,0.1)';
+      apiStatus.textContent='⚠️ 未登録 → ⚙️設定から登録';
       apiStatus.style.color='#fde047';
     }
   }
@@ -369,6 +425,7 @@ function showScreen(id){
   window.scrollTo(0,0);
   if(id==='home') updateCount();
   if(id==='history') renderHistory();
+  if(id==='records') renderRecords();
   if(id==='settings'){
     const k=getApiKey();
     document.getElementById('api-key-input').value='';
@@ -749,6 +806,68 @@ function renderResult(data, totalCount, filteredCount){
   content.innerHTML=html;
 }
 
+// ── 登録済み事例一覧 ───────────────────────────────
+let activeRecordsFilter='全て';
+function setRecordsFilter(v,btn){
+  activeRecordsFilter=v;
+  document.querySelectorAll('#records-filter .filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderRecords();
+}
+function renderRecords(){
+  let records=getRecords();
+  if(activeRecordsFilter!=='全て') records=records.filter(r=>(r.jurisdiction||'不明')===activeRecordsFilter);
+  document.getElementById('records-count').textContent=records.length+'件';
+  const list=document.getElementById('records-list');
+  if(records.length===0){
+    list.innerHTML=`<div class="empty-wrap"><div class="empty-icon">📭</div><div>データがありません</div><button class="import-link" onclick="showScreen('import')">PDFを取り込む（設定から）</button></div>`;
+    return;
+  }
+  // 新しい順に表示
+  const display=[...records].reverse();
+  list.innerHTML=display.map((r,i)=>{
+    const j=r.jurisdiction||'不明';
+    const origIdx=records.length-1-i; // 元の配列インデックス
+    return `<div class="history-item" onclick="showRecordDetail(${origIdx})" style="cursor:pointer">
+      <div class="history-date">
+        <span>${r.date||'日時不明'}</span>
+        <span class="jurisdiction-badge j-${j}">${j}</span>
+      </div>
+      <div class="history-symptom">${r.facility||''} ${r.equipment?'／ '+r.equipment:''}</div>
+      <div class="history-cause">${r.symptom||''}</div>
+    </div>`;
+  }).join('');
+}
+function showRecordDetail(idx){
+  const records=getRecords();
+  const r=records[idx];
+  if(!r)return;
+  const j=r.jurisdiction||'不明';
+  const content=document.getElementById('record-detail-content');
+  content.innerHTML=`
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <span class="jurisdiction-badge j-${j}" style="font-size:13px;padding:4px 12px">${j}管轄</span>
+        <span style="font-size:12px;color:#64748b">${r.date||'日時不明'}</span>
+      </div>
+      <div class="field"><div class="field-label">施設名</div><div class="symptom-text">${r.facility||'-'}</div></div>
+      <div class="field"><div class="field-label">機器名称</div><div class="symptom-text">${r.equipment||'-'}</div></div>
+      <div class="field"><div class="field-label">発生場所</div><div style="color:#e2e8f0">${r.location||'-'}</div></div>
+      <div class="field"><div class="field-label">報告者</div><div style="color:#e2e8f0">${r.reporter||'-'}</div></div>
+      <div class="field"><div class="field-label">発見方法</div><div style="color:#e2e8f0">${r.discovery||'-'}</div></div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="field"><div class="field-label">異常・故障内容</div><div class="symptom-text">${r.symptom||'-'}</div></div>
+      <div class="field" style="margin-top:10px"><div class="field-label">状況</div><div style="color:#e2e8f0;line-height:1.7">${r.situation||'-'}</div></div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="field"><div class="field-label">推定原因</div><div class="cause-text">${r.cause||'-'}</div></div>
+      <div class="field" style="margin-top:10px"><div class="field-label">措置対策</div><div class="action-text">${r.action||'-'}</div></div>
+      ${r.note?`<div class="field" style="margin-top:10px"><div class="field-label">備考</div><div class="note-text">${r.note}</div></div>`:''}
+    </div>`;
+  showScreen('record-detail');
+}
+
 // ── 検索履歴画面 ───────────────────────────────────
 function renderHistory(){
   const history=getSearchHistory();
@@ -873,8 +992,5 @@ function clearAllData(){
 
 updateCount();
 </script>
-</body>
-</html>
-
 </body>
 </html>
