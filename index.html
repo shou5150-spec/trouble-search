@@ -327,7 +327,20 @@ select.edit-select{width:100%;background:#0f172a;border:1px solid #334155;border
     <button class="filter-btn" onclick="setRecordsFilter('中田',this)">中田</button>
     <button class="filter-btn" onclick="setRecordsFilter('鹿川',this)">鹿川</button>
   </div>
-  <div id="records-count" class="sub"></div>
+  <!-- 並び替え＋件数 -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div style="display:flex;gap:6px">
+      <button id="sort-new-btn" onclick="setRecordsSort('new')"
+        style="padding:5px 12px;border-radius:16px;font-size:12px;font-weight:700;border:1.5px solid #22d3ee;background:#22d3ee;color:#0f172a;cursor:pointer;font-family:inherit">
+        新しい順
+      </button>
+      <button id="sort-old-btn" onclick="setRecordsSort('old')"
+        style="padding:5px 12px;border-radius:16px;font-size:12px;font-weight:700;border:1.5px solid #334155;background:transparent;color:#64748b;cursor:pointer;font-family:inherit">
+        古い順
+      </button>
+    </div>
+    <div id="records-count" style="font-size:13px;color:#94a3b8;font-weight:700"></div>
+  </div>
   <div id="records-list"></div>
 </div>
 
@@ -808,26 +821,78 @@ function renderResult(data, totalCount, filteredCount){
 
 // ── 登録済み事例一覧 ───────────────────────────────
 let activeRecordsFilter='全て';
+let activeRecordsSort='new'; // 'new' or 'old'
+
 function setRecordsFilter(v,btn){
   activeRecordsFilter=v;
   document.querySelectorAll('#records-filter .filter-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
   renderRecords();
 }
+
+function setRecordsSort(v){
+  activeRecordsSort=v;
+  const nb=document.getElementById('sort-new-btn');
+  const ob=document.getElementById('sort-old-btn');
+  if(nb&&ob){
+    if(v==='new'){
+      nb.style.background='#22d3ee'; nb.style.color='#0f172a'; nb.style.borderColor='#22d3ee';
+      ob.style.background='transparent'; ob.style.color='#64748b'; ob.style.borderColor='#334155';
+    }else{
+      ob.style.background='#22d3ee'; ob.style.color='#0f172a'; ob.style.borderColor='#22d3ee';
+      nb.style.background='transparent'; nb.style.color='#64748b'; nb.style.borderColor='#334155';
+    }
+  }
+  renderRecords();
+}
+
+// 元号付き日付文字列 → ソート用数値に変換
+// 昭和 < 平成 < 令和 の順
+function dateToSortNum(dateStr){
+  if(!dateStr) return 0;
+  const eraMap={
+    '昭和': 1925, // 昭和元年=1926年
+    '平成': 1988, // 平成元年=1989年
+    '令和': 2018  // 令和元年=2019年
+  };
+  // 元号パターン：昭和/平成/令和XX年XX月XX日
+  const eraMatch=dateStr.match(/(昭和|平成|令和)(\d+)年(\d+)月(\d+)日/);
+  if(eraMatch){
+    const base=eraMap[eraMatch[1]]||0;
+    const y=base+parseInt(eraMatch[2]);
+    const m=parseInt(eraMatch[3]);
+    const d=parseInt(eraMatch[4]);
+    return y*10000+m*100+d;
+  }
+  // 西暦パターン：2024/01/01 または 2024年01月01日
+  const adMatch=dateStr.match(/(\d{4})[\/年](\d{1,2})[\/月](\d{1,2})/);
+  if(adMatch){
+    return parseInt(adMatch[1])*10000+parseInt(adMatch[2])*100+parseInt(adMatch[3]);
+  }
+  return 0;
+}
+
 function renderRecords(){
   let records=getRecords();
   if(activeRecordsFilter!=='全て') records=records.filter(r=>(r.jurisdiction||'不明')===activeRecordsFilter);
-  document.getElementById('records-count').textContent=records.length+'件';
+
+  // 日付ソート（昭和→平成→令和の順を正しく処理）
+  const sorted=[...records].sort((a,b)=>{
+    const na=dateToSortNum(a.date||'');
+    const nb=dateToSortNum(b.date||'');
+    return activeRecordsSort==='new' ? nb-na : na-nb;
+  });
+
+  document.getElementById('records-count').textContent=sorted.length+'件';
   const list=document.getElementById('records-list');
-  if(records.length===0){
+  if(sorted.length===0){
     list.innerHTML=`<div class="empty-wrap"><div class="empty-icon">📭</div><div>データがありません</div><button class="import-link" onclick="showScreen('import')">PDFを取り込む（設定から）</button></div>`;
     return;
   }
-  // 新しい順に表示
-  const display=[...records].reverse();
-  list.innerHTML=display.map((r,i)=>{
+  list.innerHTML=sorted.map((r,i)=>{
     const j=r.jurisdiction||'不明';
-    const origIdx=records.length-1-i; // 元の配列インデックス
+    // 詳細表示用に元のインデックスを渡す
+    const origIdx=records.indexOf(r);
     return `<div class="history-item" onclick="showRecordDetail(${origIdx})" style="cursor:pointer">
       <div class="history-date">
         <span>${r.date||'日時不明'}</span>
@@ -997,3 +1062,4 @@ updateCount();
 </script>
 </body>
 </html>
+
