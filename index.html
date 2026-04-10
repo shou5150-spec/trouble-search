@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -237,12 +236,27 @@ select.edit-select{width:100%;background:#0f172a;border:1px solid #334155;border
     </div>
   </div>
 
-  <div class="upload-zone" onclick="document.getElementById('file-input').click()">
-    <div class="upload-zone-icon">📄</div>
-    <div class="upload-zone-text">PDFをタップして選択・追加</div>
-    <div class="upload-zone-sub">複数ファイル対応・新旧フォーマット対応</div>
+  <!-- ファイル選択ゾーン：ファイル個別 or フォルダ一括 -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+    <!-- ファイルを選ぶ -->
+    <div class="upload-zone" style="margin-bottom:0" onclick="document.getElementById('file-input').click()">
+      <div class="upload-zone-icon" style="font-size:28px">📄</div>
+      <div class="upload-zone-text" style="font-size:13px">ファイルを選択</div>
+      <div class="upload-zone-sub">複数選択OK</div>
+    </div>
+    <!-- フォルダを選ぶ（PC向け） -->
+    <div class="upload-zone" style="margin-bottom:0;border-color:rgba(134,239,172,0.4)" onclick="document.getElementById('folder-input').click()">
+      <div class="upload-zone-icon" style="font-size:28px">📁</div>
+      <div class="upload-zone-text" style="font-size:13px">フォルダを選択</div>
+      <div class="upload-zone-sub">PC向け・全PDF一括</div>
+    </div>
   </div>
+
+  <!-- ファイル選択（個別） -->
   <input type="file" id="file-input" accept=".pdf" multiple onchange="handleFiles(event)">
+  <!-- フォルダ選択（PC向け・中のPDFを全部取得） -->
+  <input type="file" id="folder-input" accept=".pdf" multiple webkitdirectory onchange="handleFiles(event)" style="display:none">
+
   <div id="selected-count" style="display:none;text-align:center;font-size:13px;color:#22d3ee;font-weight:700;margin-bottom:10px"></div>
   <div class="pdf-queue" id="pdf-queue"></div>
   <div id="progress-wrap" style="display:none">
@@ -458,7 +472,9 @@ let pdfQueue=[];
 let pendingConfirm=[];
 
 function handleFiles(e){
-  Array.from(e.target.files).forEach(f=>{
+  // PDFのみ対象（フォルダ選択時に他の拡張子が混じることがある）
+  const newFiles=Array.from(e.target.files).filter(f=>f.name.toLowerCase().endsWith('.pdf'));
+  newFiles.forEach(f=>{
     if(!pdfQueue.find(p=>p.name===f.name)) pdfQueue.push({file:f,name:f.name,status:'waiting'});
   });
   renderQueue();
