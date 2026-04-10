@@ -197,6 +197,8 @@ select.edit-select{width:100%;background:#0f172a;border:1px solid #334155;border
   <div class="card" style="border-color:rgba(239,68,68,0.3)">
     <div style="font-size:12px;color:#94a3b8;margin-bottom:12px">⚠️ 登録済みの事例データをすべて削除します</div>
     <button class="btn btn-danger" onclick="clearAllData()">データをすべて削除する</button>
+    <div style="font-size:11px;color:#64748b;margin-top:12px;margin-bottom:8px">取込済みファイルの記録をリセットすると、同じPDFを再度取り込めます</div>
+    <button class="btn btn-secondary" style="border-color:#334155;color:#94a3b8" onclick="resetImportedFiles()">🔄　取込済み記録をリセット</button>
   </div>
 
   <!-- 報告書取り込み -->
@@ -375,11 +377,20 @@ document.getElementById('manifest-link').href=URL.createObjectURL(new Blob([JSON
 const STORAGE_KEY='trouble_records_v4';
 const API_KEY_KEY='anthropic_api_key';
 const SEARCH_HISTORY_KEY='search_history_v1';
+const IMPORTED_FILES_KEY='imported_files_v1'; // ★成功済みファイル記録
 const MAX_SEARCH_HISTORY=50;
 
 function getRecords(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]')}catch{return[]}}
 function saveRecords(d){localStorage.setItem(STORAGE_KEY,JSON.stringify(d));updateCount()}
 function getApiKey(){return localStorage.getItem(API_KEY_KEY)||''}
+
+// ── 成功済みファイル管理 ───────────────────────────
+function getImportedFiles(){try{return JSON.parse(localStorage.getItem(IMPORTED_FILES_KEY)||'[]')}catch{return[]}}
+function addImportedFile(filename){
+  const list=getImportedFiles();
+  if(!list.includes(filename)){list.push(filename);localStorage.setItem(IMPORTED_FILES_KEY,JSON.stringify(list));}
+}
+function isAlreadyImported(filename){return getImportedFiles().includes(filename);}
 
 // ── 検索履歴 ───────────────────────────────────────
 function getSearchHistory(){try{return JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY)||'[]')}catch{return[]}}
@@ -472,20 +483,28 @@ let pdfQueue=[];
 let pendingConfirm=[];
 
 function handleFiles(e){
-  // PDFのみ対象（フォルダ選択時に他の拡張子が混じることがある）
   const newFiles=Array.from(e.target.files).filter(f=>f.name.toLowerCase().endsWith('.pdf'));
+  let skippedCount=0;
   newFiles.forEach(f=>{
-    if(!pdfQueue.find(p=>p.name===f.name)) pdfQueue.push({file:f,name:f.name,status:'waiting'});
+    if(pdfQueue.find(p=>p.name===f.name)) return; // キューに既にある
+    if(isAlreadyImported(f.name)){
+      // 成功済みはスキップ扱いでキューに追加（視覚的に確認できるように）
+      pdfQueue.push({file:f, name:f.name, status:'done', statusLabel:'✅ 取込済（スキップ）'});
+      skippedCount++;
+    } else {
+      pdfQueue.push({file:f, name:f.name, status:'waiting'});
+    }
   });
   renderQueue();
+  const waitingCount=pdfQueue.filter(p=>p.status==='waiting').length;
   const countEl=document.getElementById('selected-count');
   if(pdfQueue.length>0){
     countEl.style.display='block';
-    countEl.textContent=`📄 ${pdfQueue.length}件 選択中`;
+    countEl.textContent=`📄 ${pdfQueue.length}件（未処理:${waitingCount}件 / スキップ:${skippedCount}件）`;
   }else{
     countEl.style.display='none';
   }
-  document.getElementById('import-btn').disabled=pdfQueue.length===0;
+  document.getElementById('import-btn').disabled=waitingCount===0;
   e.target.value='';
 }
 function removeFromQueue(name){
@@ -514,13 +533,18 @@ async function startImport(){
   document.getElementById('progress-wrap').style.display='block';
   pendingConfirm=[];
   let done=0;
+  let rateLimitCount=0;
+
   for(const item of waiting){
     updatePdfStatus(item.name,'processing');
-    document.getElementById('progress-text').textContent=`読み取り中... (${done+1}/${waiting.length})`;
+    document.getElementById('progress-text').textContent=
+      `読み取り中... (${done+1}/${waiting.length})　完了:${done}件`;
     document.getElementById('progress-fill').style.width=`${(done/waiting.length)*100}%`;
+
     try{
       const base64=await fileToBase64(item.file);
       const extracted=await extractFromPdf(base64,apiKey,item.name);
+
       if(extracted && extracted.length>0){
         extracted.forEach((rec,idx)=>{
           pendingConfirm.push({
@@ -531,26 +555,59 @@ async function startImport(){
         const p=pdfQueue.find(p=>p.name===item.name);
         if(p) p.statusLabel = extracted.length>1 ? `確認待ち（${extracted.length}件）` : '確認待ち';
         updatePdfStatus(item.name,'confirming');
+        // ★成功済みとして記録
+        addImportedFile(item.name);
+        rateLimitCount=0; // 成功したらカウントリセット
       } else {
         updatePdfStatus(item.name,'error');
       }
+
+      // ★レート制限対策：API呼び出しの間に1秒待機
+      await new Promise(r=>setTimeout(r,1000));
+
     }catch(e){
-      const errMsg = e.message.includes('fetch')
-        ? 'ネットワークエラー。Braveシールドをオフにして再試行してください'
-        : e.message.slice(0,50);
-      updatePdfStatus(item.name,'error');
-      const p=pdfQueue.find(p=>p.name===item.name);
-      if(p) p.statusLabel=`❌ ${errMsg}`;
-      renderQueue();
+      const isRateLimit=e.message.includes('rate_limit')||e.message.includes('529')||e.message.includes('overloaded');
+      if(isRateLimit){
+        rateLimitCount++;
+        updatePdfStatus(item.name,'error');
+        const p=pdfQueue.find(p=>p.name===item.name);
+        if(p) p.statusLabel='⏳ レート制限（再取込可能）';
+        renderQueue();
+        // レート制限が続く場合は待機時間を延ばす（最大30秒）
+        const waitSec=Math.min(5*rateLimitCount, 30);
+        document.getElementById('progress-text').textContent=
+          `⚠️ レート制限。${waitSec}秒待機中... (${done+1}/${waiting.length})`;
+        await new Promise(r=>setTimeout(r,waitSec*1000));
+      } else {
+        const errMsg=e.message.includes('fetch')
+          ? 'ネットワークエラー（Braveシールドをオフに）'
+          : e.message.slice(0,40);
+        updatePdfStatus(item.name,'error');
+        const p=pdfQueue.find(p=>p.name===item.name);
+        if(p) p.statusLabel=`❌ ${errMsg}`;
+        renderQueue();
+        await new Promise(r=>setTimeout(r,1000));
+      }
     }
     done++;
   }
+
   document.getElementById('progress-fill').style.width='100%';
   document.getElementById('progress-wrap').style.display='none';
-  if(pendingConfirm.length>0){renderConfirm();showScreen('confirm');
-    document.querySelector('#screen-confirm .sub').textContent=`${pendingConfirm.length}件を抽出しました。内容を確認・修正してから登録してください`;
+
+  const errorFiles=pdfQueue.filter(p=>p.status==='error' && (p.statusLabel||'').includes('レート制限'));
+  if(pendingConfirm.length>0){
+    renderConfirm();
+    showScreen('confirm');
+    let subMsg=`${pendingConfirm.length}件を抽出しました。内容を確認・修正してから登録してください`;
+    if(errorFiles.length>0) subMsg+=`（レート制限で${errorFiles.length}件未処理。再度フォルダを選択してください）`;
+    document.querySelector('#screen-confirm .sub').textContent=subMsg;
+  } else {
+    let errMsg='❌ 読み取れませんでした';
+    if(errorFiles.length>0) errMsg=`⚠️ ${errorFiles.length}件がレート制限でエラー。少し待ってから同じフォルダを再選択してください`;
+    document.getElementById('import-msg').innerHTML=`<div class="msg msg-error">${errMsg}</div>`;
+    document.getElementById('import-btn').disabled=false;
   }
-  else{document.getElementById('import-msg').innerHTML='<div class="msg msg-error">❌ 読み取れませんでした</div>';document.getElementById('import-btn').disabled=false}
 }
 
 async function extractFromPdf(base64,apiKey,filename){
@@ -1087,9 +1144,15 @@ function restoreData(e){
 function clearAllData(){
   if(!confirm('本当にすべてのデータを削除しますか？'))return;
   localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(IMPORTED_FILES_KEY);
   updateCount();
   alert('削除しました。');
   showScreen('home');
+}
+function resetImportedFiles(){
+  if(!confirm('取込済みファイルの記録をリセットしますか？\n（データは消えません。同じPDFを再度取り込めるようになります）'))return;
+  localStorage.removeItem(IMPORTED_FILES_KEY);
+  alert('リセットしました。');
 }
 
 updateCount();
