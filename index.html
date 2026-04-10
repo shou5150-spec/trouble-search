@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -612,7 +613,12 @@ function renderConfirm(){
 function updatePending(i,key,value){pendingConfirm[i][key]=value}
 function saveConfirmed(){
   const existing=getRecords();
-  const merged=[...existing,...pendingConfirm.map((r,i)=>({...r,id:existing.length+i+1,_filename:undefined}))];
+  const merged=[...existing,...pendingConfirm.map((r,i)=>({
+    ...r,
+    id: existing.length+i+1,
+    source_file: r._filename||'',  // ★ファイル名をsource_fileとして保存
+    _filename: undefined
+  }))];
   saveRecords(merged);
   pdfQueue=pdfQueue.map(p=>({...p,status:p.status==='confirming'?'done':p.status}));
   document.getElementById('confirm-msg').innerHTML=`<div class="msg">✅ ${pendingConfirm.length}件を登録しました（合計${merged.length}件）</div>`;
@@ -753,18 +759,24 @@ async function handleSearch(){
 
   // ── Stage2: AI検索 ────────────────────────────
   const recordsText=filtered.map((r,i)=>
-    `【事例${i+1}】日時:${r.date||'不明'} / 施設:${r.facility||''} / 管轄:${r.jurisdiction||'不明'} / 機器:${r.equipment||''} / 症状:${r.symptom||''} / 状況:${r.situation||''} / 原因:${r.cause||''} / 対処:${r.action||''}`
+    `【事例${i+1}】ファイル:${r.source_file||'不明'} / 日時:${r.date||'不明'} / 施設:${r.facility||''} / 管轄:${r.jurisdiction||'不明'} / 機器:${r.equipment||''} / 症状:${r.symptom||''} / 状況:${r.situation||''} / 原因:${r.cause||''} / 対処:${r.action||''}`
   ).join('\n');
 
   const prompt=`あなたは浄化センターのトラブル対応支援AIです。
-以下は「${query}」に関連する過去のトラブル事例（キーワード絞り込み済み${filteredCount}件）です：
-${recordsText}
----
 現在発生しているトラブル：「${query}」
 
-上記から最も類似する事例を最大3件抽出してください。
-以下のJSON形式のみで返してください（前置き・説明文・マークダウン記号は不要）：
-{"similar":[{"rank":1,"match":"類似理由20字以内","date":"日時","facility":"施設名","jurisdiction":"管轄","equipment":"機器名","symptom":"症状","cause":"原因","action":"対処法","note":"所見"}],"advice":"現在のトラブルへの対応アドバイスを120字程度で"}`;
+以下は関連する可能性がある過去の事例（キーワード絞り込み済み${filteredCount}件）です：
+${recordsText}
+---
+【指示】
+1. 上記の事例の中から、現在のトラブルと類似・関連する可能性がある事例を**可能性が濃厚な順に最大10件**抽出してください。
+2. 直接一致だけでなく、原因・症状・機器の種類が似ているものも幅広く含めてください。
+3. 各事例について「なぜ類似しているか」を簡潔に示してください。
+4. 各事例に「この事例を参考にした場合の個別アドバイス」を50字程度で追加してください。
+5. 全体アドバイスは現場で今すぐ確認すべき点・対処の優先順位を200字程度で具体的に記述してください。
+
+以下のJSON形式のみで返してください（前置き・説明文・マークダウン記号は一切不要）：
+{"similar":[{"rank":1,"match":"類似理由25字以内","source_file":"ファイル名","date":"日時","facility":"施設名","jurisdiction":"管轄","equipment":"機器名","symptom":"症状","cause":"原因","action":"対処法","note":"所見","advice":"この事例を参考にした個別アドバイス50字程度"}],"advice":"現場対応アドバイス200字程度"}`;
 
   try{
     const res=await fetch('https://api.anthropic.com/v1/messages',{
@@ -775,7 +787,7 @@ ${recordsText}
         'anthropic-version':'2023-06-01',
         'anthropic-dangerous-direct-browser-access':'true'
       },
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:3000,messages:[{role:'user',content:prompt}]})
     });
     const data=await res.json();
     if(data.error)throw new Error(data.error.message);
@@ -798,8 +810,8 @@ ${recordsText}
 function renderResult(data, totalCount, filteredCount){
   const content=document.getElementById('result-content');
   let html=`<div class="filter-result-badge">✅ ${totalCount}件 → <strong style="color:#22d3ee;margin:0 4px">${filteredCount}件</strong>に絞り込んでAI分析</div>`;
-  html+=`<div class="advice-card"><div class="advice-label">💡 AI アドバイス</div><div class="advice-text">${data.advice||''}</div></div>`;
-  html+=`<div class="section-label">類似事例</div>`;
+  html+=`<div class="advice-card"><div class="advice-label">💡 総合アドバイス</div><div class="advice-text">${data.advice||''}</div></div>`;
+  html+=`<div class="section-label">類似事例（可能性が濃厚な順）</div>`;
   (data.similar||[]).forEach(item=>{
     const j=item.jurisdiction||'不明';
     html+=`<div class="result-card">
@@ -809,11 +821,16 @@ function renderResult(data, totalCount, filteredCount){
         <span class="jurisdiction-badge j-${j}">${j}</span>
         <span class="date-text">${item.date||''}</span>
       </div>
-      <div style="font-size:12px;color:#64748b;margin-bottom:8px">${item.facility||''} ${item.equipment?'／ 🔧 '+item.equipment:''}</div>
+      <div style="font-size:12px;color:#64748b;margin-bottom:4px">${item.facility||''} ${item.equipment?'／ 🔧 '+item.equipment:''}</div>
+      ${item.source_file?`<div style="font-size:11px;color:#475569;margin-bottom:8px">📄 ${item.source_file}</div>`:''}
       <div class="field"><div class="field-label">症状</div><div class="symptom-text">${item.symptom||'-'}</div></div>
       <div class="field"><div class="field-label">原因</div><div class="cause-text">${item.cause||'-'}</div></div>
       <div class="field"><div class="field-label">対処法</div><div class="action-text">${item.action||'-'}</div></div>
       ${item.note?`<div class="field"><div class="field-label">所見</div><div class="note-text">${item.note}</div></div>`:''}
+      ${item.advice?`<div style="background:rgba(253,224,71,0.08);border:1px solid rgba(253,224,71,0.3);border-radius:10px;padding:8px 10px;margin-top:10px">
+        <div style="font-size:10px;color:#fde047;font-weight:700;margin-bottom:4px">💬 この事例を参考にするなら</div>
+        <div style="font-size:12px;color:#fde047;line-height:1.6">${item.advice}</div>
+      </div>`:''}
     </div>`;
   });
   content.innerHTML=html;
@@ -915,6 +932,7 @@ function showRecordDetail(idx){
         <span class="jurisdiction-badge j-${j}" style="font-size:13px;padding:4px 12px">${j}管轄</span>
         <span style="font-size:12px;color:#64748b">${r.date||'日時不明'}</span>
       </div>
+      ${r.source_file?`<div style="font-size:11px;color:#475569;margin-bottom:10px">📄 ${r.source_file}</div>`:''}
       <div class="field"><div class="field-label">施設名</div><div class="symptom-text">${r.facility||'-'}</div></div>
       <div class="field"><div class="field-label">機器名称</div><div class="symptom-text">${r.equipment||'-'}</div></div>
       <div class="field"><div class="field-label">発生場所</div><div style="color:#e2e8f0">${r.location||'-'}</div></div>
@@ -1062,4 +1080,3 @@ updateCount();
 </script>
 </body>
 </html>
-
