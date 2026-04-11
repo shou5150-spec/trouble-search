@@ -1019,10 +1019,11 @@ function dateToSortNum(dateStr){
 }
 
 function renderRecords(){
+  const allRecords=getRecords(); // 全件（インデックス参照用）
   let records=getRecords();
   if(activeRecordsFilter!=='全て') records=records.filter(r=>(r.jurisdiction||'不明')===activeRecordsFilter);
 
-  // 日付ソート（昭和→平成→令和の順を正しく処理）
+  // 日付ソート
   const sorted=[...records].sort((a,b)=>{
     const na=dateToSortNum(a.date||'');
     const nb=dateToSortNum(b.date||'');
@@ -1035,17 +1036,20 @@ function renderRecords(){
     list.innerHTML=`<div class="empty-wrap"><div class="empty-icon">📭</div><div>データがありません</div><button class="import-link" onclick="showScreen('import')">PDFを取り込む（設定から）</button></div>`;
     return;
   }
-  list.innerHTML=sorted.map((r,i)=>{
+  list.innerHTML=sorted.map((r)=>{
     const j=r.jurisdiction||'不明';
-    // 詳細表示用に元のインデックスを渡す
-    const origIdx=records.indexOf(r);
+    // ★全件配列から正しいインデックスを取得（id一致で検索）
+    const origIdx=allRecords.findIndex(rec=>
+      rec.id===r.id && rec.date===r.date && rec.facility===r.facility
+    );
     return `<div class="history-item" onclick="showRecordDetail(${origIdx})" style="cursor:pointer">
       <div class="history-date">
         <span>${r.date||'日時不明'}</span>
         <span class="jurisdiction-badge j-${j}">${j}</span>
       </div>
       <div class="history-symptom">${r.facility||''} ${r.equipment?'／ '+r.equipment:''}</div>
-      <div class="history-cause">${r.symptom||''}</div>
+      <div style="font-size:11px;color:#64748b;margin-top:2px">${r.symptom||''}</div>
+      ${r.source_file?`<div style="font-size:10px;color:#475569;margin-top:2px">📄 ${r.source_file}</div>`:''}
     </div>`;
   }).join('');
 }
