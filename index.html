@@ -728,20 +728,17 @@ function loadSample(){
 // ★★★ 2段階検索ロジック ★★★
 // ══════════════════════════════════════════════════
 
-// ── Stage1: キーワード絞り込み（文章入力対応）────────
+// ── Stage1: キーワード絞り込み（管轄分散・文章対応）────
 function keywordFilter(records, query, maxResults=60) {
-  // 文章からキーワードを抽出
-  // 助詞・接続詞などを除去して意味のある単語だけ残す
   const stopWords=['が','は','を','に','で','の','と','も','や','から','まで','より','けど','ので','て','して','した','する','なり','です','ます','ました','します','している','していた'];
 
   const keywords = query
     .replace(/[、。　・,，.\s]/g, ' ')
     .split(/\s+/)
-    .filter(k => k.length >= 2)  // 2文字以上
+    .filter(k => k.length >= 2)
     .filter(k => !stopWords.includes(k))
     .map(k => k.toLowerCase());
 
-  // キーワードが少ない場合は1文字も含める
   const allKeywords = query
     .replace(/[、。　・,，.\s]/g, ' ')
     .split(/\s+/)
@@ -750,9 +747,7 @@ function keywordFilter(records, query, maxResults=60) {
 
   const useKeywords = keywords.length > 0 ? keywords : allKeywords;
 
-  if(useKeywords.length === 0) return records.slice(0, maxResults);
-
-  // 各レコードのスコアを計算（ポピュラー度も加味）
+  // スコア計算
   const scored = records.map(r => {
     const text = [
       r.symptom, r.cause, r.action, r.situation,
@@ -774,11 +769,37 @@ function keywordFilter(records, query, maxResults=60) {
     return { record: r, score };
   });
 
-  // スコアが0でも上位に含める（文章検索で全滅しないよう）
-  const withScore = scored.filter(s => s.score > 0);
-  const result = withScore.length > 0
-    ? withScore.sort((a,b) => b.score - a.score).slice(0, maxResults).map(s=>s.record)
-    : records.slice(0, maxResults); // ヒットなしの場合は全件渡す
+  const withScore = scored.filter(s => s.score > 0).sort((a,b) => b.score - a.score);
+  const pool = withScore.length > 0 ? withScore.map(s=>s.record) : records;
+
+  // ② 管轄別に分散取得（各管轄から均等に）
+  const jurisdictions = ['三高','沖','中田','鹿川','不明'];
+  const perJ = Math.floor(maxResults / jurisdictions.length); // 各管轄から12件
+  const result = [];
+  const used = new Set();
+
+  // まず各管轄から均等に取得
+  for(const j of jurisdictions){
+    const jRecords = pool.filter(r=>(r.jurisdiction||'不明')===j);
+    let count=0;
+    for(const r of jRecords){
+      if(count >= perJ) break;
+      if(!used.has(r.id||r.date+r.facility)){
+        result.push(r);
+        used.add(r.id||r.date+r.facility);
+        count++;
+      }
+    }
+  }
+
+  // 残り枠をスコア順で埋める
+  for(const r of pool){
+    if(result.length >= maxResults) break;
+    if(!used.has(r.id||r.date+r.facility)){
+      result.push(r);
+      used.add(r.id||r.date+r.facility);
+    }
+  }
 
   return result;
 }
@@ -858,23 +879,30 @@ async function handleSearch(){
 
   // ── Stage2: AI検索 ────────────────────────────
   const recordsText=filtered.map((r,i)=>
-    `[${i+1}]ファイル:${r.source_file||'不明'} 日時:${r.date||'不明'} 施設:${r.facility||''} 機器:${r.equipment||''} 症状:${r.symptom||''} 原因:${r.cause||''} 対処:${r.action||''}`
+    `[${i+1}]ファイル:${r.source_file||'不明'} 日時:${r.date||'不明'} 施設:${r.facility||''} 管轄:${r.jurisdiction||'不明'} 機器:${r.equipment||''} 症状:${r.symptom||''} 原因:${r.cause||''} 対処:${r.action||''}`
   ).join('\n');
 
   const prompt=`浄化センタートラブル支援AIです。
-現在のトラブル：「${query}」
+現在発生しているトラブル：「${query}」
 
-過去の事例（${filteredCount}件）：
+過去の事例（管轄別に分散済み・${filteredCount}件）：
 ${recordsText}
 
-【指示】
-- 現在のトラブルと類似・関連する事例を「データベース内で多く発生している順（ポピュラーな順）」に最大10件選ぶ
-- 文章で入力された場合も意図を読み取り関連事例を幅広く選ぶ
-- 個別アドバイスは30字以内に簡潔にまとめる
-- 全体アドバイスは150字以内
+【選定ルール】
+- 症状・原因・機器が似ている事例を幅広く最大10件選ぶ
+- 同じ原因パターンは1〜2件に抑え、異なる原因パターンを優先する
+- 同じ施設・機器の繰り返しは避け、多様な観点の事例を選ぶ
+- 類似度が高い順ではなく「原因の可能性を網羅できる」順に並べる
+
+【個別アドバイスのルール】
+- 「この事例を参考にした場合、現在のトラブルの原因を特定するために何を確認すべきか」を30字以内で具体的に書く
+- 例：「モーターリレーのトリップ表示を確認」「インペラーへの異物絡まりを目視確認」
+
+【全体アドバイス】
+- 現在のトラブルで考えられる原因の可能性を優先順位つきで150字以内にまとめる
 
 必ずこのJSON形式のみで返す（他の文字列一切不要）：
-{"advice":"全体アドバイス150字以内","similar":[{"rank":1,"source_file":"ファイル名","date":"日時","facility":"施設名","jurisdiction":"管轄","equipment":"機器名","symptom":"症状30字以内","cause":"原因30字以内","action":"対処30字以内","match":"類似理由20字以内","advice":"個別アドバイス30字以内"}]}`;
+{"advice":"全体アドバイス150字以内","similar":[{"rank":1,"source_file":"ファイル名","date":"日時","facility":"施設名","jurisdiction":"管轄","equipment":"機器名","symptom":"症状30字以内","cause":"原因30字以内","action":"対処30字以内","match":"類似理由20字以内","advice":"原因特定のための確認事項30字以内"}]}`;
 
   try{
     const res=await fetch('https://api.anthropic.com/v1/messages',{
@@ -929,7 +957,7 @@ function renderResult(data, totalCount, filteredCount){
       <div class="field"><div class="field-label">対処法</div><div class="action-text">${item.action||'-'}</div></div>
       ${item.note?`<div class="field"><div class="field-label">所見</div><div class="note-text">${item.note}</div></div>`:''}
       ${item.advice?`<div style="background:rgba(253,224,71,0.08);border:1px solid rgba(253,224,71,0.3);border-radius:10px;padding:8px 10px;margin-top:10px">
-        <div style="font-size:10px;color:#fde047;font-weight:700;margin-bottom:4px">💬 この事例を参考にするなら</div>
+        <div style="font-size:10px;color:#fde047;font-weight:700;margin-bottom:4px">🔎 原因特定のために確認すること</div>
         <div style="font-size:12px;color:#fde047;line-height:1.6">${item.advice}</div>
       </div>`:''}
     </div>`;
@@ -1102,7 +1130,7 @@ function showHistoryDetail(idx){
       <div class="field"><div class="field-label">対処法</div><div class="action-text">${item.action||'-'}</div></div>
       ${item.note?`<div class="field"><div class="field-label">所見</div><div class="note-text">${item.note}</div></div>`:''}
       ${item.advice?`<div style="background:rgba(253,224,71,0.08);border:1px solid rgba(253,224,71,0.3);border-radius:10px;padding:8px 10px;margin-top:10px">
-        <div style="font-size:10px;color:#fde047;font-weight:700;margin-bottom:4px">💬 この事例を参考にするなら</div>
+        <div style="font-size:10px;color:#fde047;font-weight:700;margin-bottom:4px">🔎 原因特定のために確認すること</div>
         <div style="font-size:12px;color:#fde047;line-height:1.6">${item.advice}</div>
       </div>`:''}
     </div>`;
