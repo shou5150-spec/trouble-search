@@ -993,16 +993,19 @@ function setRecordsSort(v){
 }
 
 // 元号付き日付文字列 → ソート用数値に変換
-// 昭和 < 平成 < 令和 の順
 function dateToSortNum(dateStr){
   if(!dateStr) return 0;
   const eraMap={
-    '昭和': 1925, // 昭和元年=1926年
-    '平成': 1988, // 平成元年=1989年
-    '令和': 2018  // 令和元年=2019年
+    '昭和': 1925,
+    '平成': 1988,
+    '令和': 2018
   };
+
+  // 「元年」を「1年」に置換してから処理
+  let str = dateStr.replace(/元年/, '1年');
+
   // 元号パターン：昭和/平成/令和XX年XX月XX日
-  const eraMatch=dateStr.match(/(昭和|平成|令和)(\d+)年(\d+)月(\d+)日/);
+  const eraMatch=str.match(/(昭和|平成|令和)(\d+)年[^\d]*(\d+)月[^\d]*(\d+)日/);
   if(eraMatch){
     const base=eraMap[eraMatch[1]]||0;
     const y=base+parseInt(eraMatch[2]);
@@ -1010,11 +1013,20 @@ function dateToSortNum(dateStr){
     const d=parseInt(eraMatch[4]);
     return y*10000+m*100+d;
   }
+
   // 西暦パターン：2024/01/01 または 2024年01月01日
-  const adMatch=dateStr.match(/(\d{4})[\/年](\d{1,2})[\/月](\d{1,2})/);
+  const adMatch=str.match(/(\d{4})[\/年\-](\d{1,2})[\/月\-](\d{1,2})/);
   if(adMatch){
     return parseInt(adMatch[1])*10000+parseInt(adMatch[2])*100+parseInt(adMatch[3]);
   }
+
+  // 年だけのパターン（月日不明）：平成30年など
+  const yearOnly=str.match(/(昭和|平成|令和)(\d+)年/);
+  if(yearOnly){
+    const base=eraMap[yearOnly[1]]||0;
+    return (base+parseInt(yearOnly[2]))*10000;
+  }
+
   return 0;
 }
 
