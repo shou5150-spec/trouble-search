@@ -384,6 +384,45 @@ select.edit-select{width:100%;background:#0f172a;border:1px solid #334155;border
 const mf={name:"Trouble-Search",short_name:"Trouble-Search",start_url:"./",display:"standalone",background_color:"#0f172a",theme_color:"#0f172a",icons:[{src:"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%230f172a'/><text y='130' x='96' font-size='110' text-anchor='middle'>🔧</text></svg>",sizes:"192x192",type:"image/svg+xml"}]};
 document.getElementById('manifest-link').href=URL.createObjectURL(new Blob([JSON.stringify(mf)],{type:'application/json'}));
 
+// ══════════════════════════════════════════════════
+// Claude API 共通呼び出し（モデルIDはここ1か所で管理）
+// ══════════════════════════════════════════════════
+const MODEL_ID='claude-sonnet-5';   // ★モデル変更時はここだけ書き換える
+const API_URL='https://api.anthropic.com/v1/messages';
+
+async function callClaudeAPI(apiKey, messages, maxTokens){
+  const headers={
+    'Content-Type':'application/json',
+    'x-api-key':apiKey,
+    'anthropic-version':'2023-06-01',
+    'anthropic-dangerous-direct-browser-access':'true'
+  };
+  // Sonnet 5 は思考(thinking)が標準でONのため、
+  // 明示的にOFFにして速度・コスト・出力枠を確保する
+  const buildBody=(disableThinking)=>{
+    const body={ model:MODEL_ID, max_tokens:maxTokens, messages };
+    if(disableThinking) body.thinking={ type:'disabled' };
+    return body;
+  };
+
+  let res=await fetch(API_URL,{method:'POST',headers,body:JSON.stringify(buildBody(true))});
+  let data=await res.json();
+
+  // thinking指定が拒否されたモデルの場合は指定なしで再試行
+  if(data.error && /thinking/i.test(data.error.message||'')){
+    res=await fetch(API_URL,{method:'POST',headers,body:JSON.stringify(buildBody(false))});
+    data=await res.json();
+  }
+
+  if(data.error) throw new Error(`(${data.error.type}) ${data.error.message}`);
+
+  // thinkingブロックを除外し、text ブロックだけを取り出す
+  return (data.content||[])
+    .filter(c=>c.type==='text')
+    .map(c=>c.text||'')
+    .join('');
+}
+
 // ── Storage ────────────────────────────────────────
 const STORAGE_KEY='trouble_records_v4';
 const API_KEY_KEY='anthropic_api_key';
@@ -647,28 +686,17 @@ async function extractFromPdf(base64,apiKey,filename){
 
 複数件ある場合は配列に複数含めてください。情報が不明な項目は空文字にしてください。`;
 
-  const res=await fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',
-    headers:{
-      'Content-Type':'application/json',
-      'x-api-key':apiKey,
-      'anthropic-version':'2023-06-01',
-      'anthropic-dangerous-direct-browser-access':'true'
-    },
-    body:JSON.stringify({
-      model:'claude-sonnet-4-20250514',
-      max_tokens:3000,
-      messages:[{role:'user',content:[
-        {type:'document',source:{type:'base64',media_type:'application/pdf',data:base64}},
-        {type:'text',text:prompt}
-      ]}]
-    })
-  });
-  const data=await res.json();
-  if(data.error)throw new Error(`(${data.error.type}) ${data.error.message}`);
-  const text=(data.content||[]).map(c=>c.text||'').join('').replace(/```json|```/g,'').trim();
+  const rawText=await callClaudeAPI(apiKey,[{role:'user',content:[
+    {type:'document',source:{type:'base64',media_type:'application/pdf',data:base64}},
+    {type:'text',text:prompt}
+  ]}],8000);
+
+  const text=rawText.replace(/```json|```/g,'').trim();
+  // JSON部分だけを抽出（配列でもオブジェクトでも対応）
+  const jsonMatch=text.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
+  if(!jsonMatch) throw new Error('JSON解析失敗: '+text.slice(0,50));
   let parsed;
-  try{ parsed=JSON.parse(text); }
+  try{ parsed=JSON.parse(jsonMatch[0]); }
   catch(e){ throw new Error('JSON解析失敗: '+text.slice(0,50)); }
   return Array.isArray(parsed) ? parsed : [parsed];
 }
@@ -905,19 +933,7 @@ ${recordsText}
 {"advice":"全体アドバイス150字以内","similar":[{"rank":1,"source_file":"ファイル名","date":"日時","facility":"施設名","jurisdiction":"管轄","equipment":"機器名","symptom":"症状30字以内","cause":"原因30字以内","action":"対処30字以内","match":"類似理由20字以内","advice":"原因特定のための確認事項30字以内"}]}`;
 
   try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'x-api-key':apiKey,
-        'anthropic-version':'2023-06-01',
-        'anthropic-dangerous-direct-browser-access':'true'
-      },
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:5000,messages:[{role:'user',content:prompt}]})
-    });
-    const data=await res.json();
-    if(data.error)throw new Error(data.error.message);
-    const rawText=(data.content||[]).map(c=>c.text||'').join('');
+    const rawText=await callClaudeAPI(apiKey,[{role:'user',content:prompt}],16000);
     // JSON部分だけ抽出（前後の余分な文字を除去）
     const jsonMatch=rawText.match(/\{[\s\S]*\}/);
     if(!jsonMatch) throw new Error('AIの回答からJSONを取得できませんでした');
